@@ -1,0 +1,282 @@
+# Barbearia — telas e modelo de dados do MVP
+
+Versão 0.2 · 5 de outubro de 2026 · Etapa 1: planejamento.
+
+Stack definida: React com JavaScript, Laravel com PHP, MySQL, Docker e testes. Este documento define a proposta inicial de produto e dados; não representa funcionalidades implementadas ou decisões adicionais já aprovadas pelo usuário.
+
+## 1. Limites e decisões propostas
+
+- Uma única barbearia, vários profissionais e um administrador. Sem cadastro público de usuário e sem login de profissional nesta versão.
+- Uma reserva atende um cliente, com um profissional e um serviço. “Corte + barba” pode ser um serviço próprio.
+- O cliente escolhe o profissional. A opção “qualquer profissional” fica para uma evolução.
+- No público, nome, e-mail e telefone são obrigatórios. No administrador, nome é obrigatório; e-mail e telefone são opcionais. Não existe conta do cliente. Sem e-mail, não criar notificação nem oferecer envio/reenvio.
+- Reserva confirmada imediatamente após a gravação. O e-mail comunica a confirmação; não é uma etapa de aprovação.
+- Cancelamento pelo cliente permitido até o limite de antecedência configurado em `cancel_min_notice_minutes` (padrão 0) e sempre antes do início. O administrador pode cancelar uma reserva confirmada mesmo após esse limite, com registro de autoria.
+- Agenda pública com horizonte de 30 dias e início mínimo 60 minutos no futuro; parâmetros configuráveis pelo administrador. O administrador ignora a antecedência mínima e pode usar “Atender agora”, cujo início é calculado pelo servidor no momento da gravação; não permite horário retroativo arbitrário. Limite de horizonte permanece para reservas futuras do admin.
+- Horários públicos sugeridos a cada 15 minutos; “Atender agora” pode iniciar fora dessa grade, com fim calculado pela duração do serviço. A duração vem do serviço; a reserva precisa caber integralmente em um período de expediente.
+- Limite público de 3 reservas futuras confirmadas por e-mail OU telefone normalizado, configurável por `max_active_per_contact`. Verificar cada contato separadamente, contando também reservas do admin com o mesmo contato. Admin pode ultrapassar o teto; manter rate limit. Normalizar e-mail por trim/lowercase, sem remover pontos ou aliases; normalizar telefone para E.164. O limite usa contatos exatos normalizados, sem inferir identidade. Contatos falsos diferentes ainda contornam o limite: ele reduz abuso, não verifica identidade.
+- Sem pagamento, WhatsApp, recorrência, lista de espera, múltiplas unidades ou remarcação automática.
+- Remarcação no MVP: cancelar e criar uma nova reserva. Não oferecer uma ação que possa perder a reserva original silenciosamente.
+
+## 2. Telas públicas
+
+O agendamento usa uma página com quatro passos, preservando escolhas ao voltar. No celular, os passos e o resumo ficam empilhados; no desktop, o resumo aparece ao lado.
+
+| Tela / rota | Composição | Ações e estados |
+| --- | --- | --- |
+| Início — `/` | Nome da barbearia, apresentação curta, endereço, contato e serviços com preço e duração | “Agendar horário”; serviços inativos não aparecem |
+| Agendamento — `/agendar` | Passo 1: cards de serviço. Passo 2: cards de profissionais habilitados. Passo 3: data e horários livres. Passo 4: dados do cliente e resumo | Avançar, voltar e confirmar; carregamento, erro com nova tentativa, nenhuma disponibilidade e validação de campos |
+| Resultado — mesma jornada de `/agendar` | Confirmação, serviço, profissional, data, horário, preço, endereço e aviso sobre e-mail | Voltar ao início; evitar rota pública que exponha dados pessoais por ID sequencial |
+| Cancelamento — `/cancelar/{public_id}?expires=...&signature=...` | Resumo mínimo da reserva e pergunta de confirmação | Abrir o link apenas consulta. Botão “Confirmar cancelamento” envia POST; mostrar cancelado, já cancelado, link inválido/expirado ou atendimento já iniciado |
+
+### Composição do agendamento
+
+1. Cabeçalho compacto: logotipo/nome, endereço e contato.
+2. Indicador: Serviço → Profissional → Horário → Seus dados.
+3. Área principal: opções do passo atual, com seleção visível e acesso pelo teclado.
+4. Resumo: serviço, duração, profissional, data, horário e preço. Informações ainda não escolhidas aparecem como “A escolher”.
+5. Ações: “Voltar” e “Continuar”; no último passo, “Confirmar agendamento”.
+
+O preço vem da API. Não existe cálculo confiável de preço ou duração baseado em valores enviados pelo navegador.
+
+### Comportamentos importantes
+
+- Ao mudar serviço ou profissional, limpar escolhas de data/horário que deixaram de ser válidas.
+- Consultar disponibilidade novamente ao escolher a data. A lista é informativa: a confirmação precisa revalidar no servidor.
+- Se outro cliente ocupar o horário, informar “Esse horário acabou de ser reservado. Escolha outro.”, atualizar a lista e preservar os dados do cliente.
+- Desabilitar o botão durante o envio; usar chave de idempotência para repetição causada por duplo clique, timeout ou nova tentativa.
+- Se a reserva foi salva e o e-mail estiver atrasado, manter a confirmação na tela. Não induzir uma segunda reserva.
+- A confirmação visual é mantida na jornada atual; recuperar a reserva em outro dispositivo depende do link recebido por e-mail.
+- Não guardar nome, telefone ou e-mail em URL ou logs de navegação. No link de cancelamento, aplicar `Referrer-Policy: no-referrer`, evitar scripts de terceiros e redigir a assinatura nos logs.
+
+## 3. Telas do administrador
+
+Login privado; cadastro do primeiro administrador por seed/comando, sem registro público.
+
+| Tela / rota | Conteúdo e ações |
+| --- | --- |
+| Login — `/admin/login` | E-mail, senha, erros de autenticação e encerramento seguro de sessão |
+| Agenda — `/admin/agenda` | Tela inicial após login. Data, navegação anterior/hoje/próxima, filtro de profissional e status; lista cronológica no celular, grade diária no desktop; ação “Novo agendamento” |
+| Detalhes da reserva — drawer/modal da agenda | Dados do cliente, serviço e preço da reserva, início/fim, profissional e status; cancelar, concluir, marcar ausência e reenviar confirmação quando aplicável |
+| Novo agendamento — modal ou página da agenda | Nome obrigatório, contatos opcionais, “Agendar” ou “Atender agora”; ignora antecedência pública e teto por contato, mas mantém expediente, vínculo ativo, duração e conflitos |
+| Serviços — `/admin/servicos` | Lista, criar/editar nome, descrição, duração em minutos, preço e ativação; desativar sem apagar histórico |
+| Profissionais — `/admin/profissionais` | Lista, criar/editar nome público, descrição opcional, serviços oferecidos e ativação |
+| Expediente — `/admin/expediente` | Seleção de profissional, dias da semana e períodos; copiar para outros dias; vários períodos no mesmo dia, por exemplo 09h–12h e 13h–18h |
+| Bloqueios — `/admin/bloqueios` | Profissional, intervalo de datas/horas e motivo interno; listar, criar e remover; um bloqueio não cancela reservas existentes |
+| Configurações — `/admin/configuracoes` | Nome da barbearia, endereço, contato, fuso horário, antecedência pública, horizonte, antecedência de cancelamento e teto por contato |
+
+Não criar dashboard de indicadores separado no MVP. A agenda resolve a operação diária.
+
+### Estados da agenda
+
+- `confirmed`: ocupa horário; pode ser cancelado pelo cliente antes do limite configurado, pelo admin enquanto confirmado, concluído após o fim ou marcado como ausência após o início.
+- `cancelled`: libera horário; estado final.
+- `completed`: preserva o atendimento realizado; estado final, permitido após o fim.
+- `no_show`: registra ausência; estado final, permitido após o início; não permite nova reserva retroativa.
+
+Reservas públicas são futuras; o admin também pode registrar atendimento imediato pelo modo “Atender agora”. Reservas concluídas e ausências preservam seu intervalo no histórico. A interface deve distinguir estados por texto, não apenas cor.
+
+## 4. Modelo de dados
+
+Convenções: IDs numéricos internos, timestamps de auditoria, chaves estrangeiras e InnoDB. Instantes são persistidos em UTC; expediente semanal usa hora local da barbearia. Valores monetários em `DECIMAL(10,2)`, nunca float. Campos `is_active` controlam cadastros sem excluir referências históricas.
+
+| Tabela | Campos de negócio | Finalidade e restrições |
+| --- | --- | --- |
+| `users` | `id`, `name`, `email`, `password`, timestamps | Administradores apenas. E-mail único e senha com hash. Campos auxiliares de autenticação definidos na fundação técnica |
+| `business_settings` | `id`, `name`, `address`, `phone`, `timezone`, `min_notice_minutes`, `booking_horizon_days`, `cancel_min_notice_minutes`, `max_active_per_contact`, timestamps | Registro único. Inicial: `America/Sao_Paulo`, 60 minutos, 30 dias, cancelamento 0 minutos e teto 3. Passo de horários fixo em 15 minutos no MVP |
+| `services` | `id`, `name`, `description` nullable, `duration_minutes`, `price`, `is_active`, timestamps | Duração inteira positiva e preço não negativo |
+| `professionals` | `id`, `name`, `description` nullable, `is_active`, timestamps | Profissional não possui login; desativar impede novas reservas, sem cancelar as existentes |
+| `professional_service` | `professional_id`, `service_id` | Relação N:N; par único. Preço/duração são os do serviço, sem variação por profissional |
+| `working_hours` | `id`, `professional_id`, `weekday`, `start_time`, `end_time`, timestamps | 0 = domingo a 6 = sábado; início menor que fim; períodos do mesmo dia não se sobrepõem; sem expediente atravessando meia-noite no MVP |
+| `schedule_blocks` | `id`, `professional_id`, `starts_at`, `ends_at`, `reason` nullable, timestamps | Intervalo UTC; início menor que fim. Motivo acessível apenas ao administrador. Para fechar a barbearia inteira, criar bloqueios para todos os profissionais numa operação atômica |
+| `appointments` | `id`, `public_id`, `professional_id`, `service_id`, `customer_name`, `customer_email` nullable, `customer_phone` nullable, `starts_at`, `ends_at`, `status`, `source`, `service_name_snapshot`, `duration_minutes_snapshot`, `price_snapshot`, `cancelled_at` nullable, `cancelled_by` nullable, `idempotency_key`, `request_fingerprint`, timestamps | `source`: `public` ou `admin`. `cancelled_by`: `customer` ou `admin`. `public_id` (ULID) e chave de idempotência únicos. E-mail canônico (trim/lowercase) e telefone E.164; campos nullable só no fluxo admin. Status inicial `confirmed`. Snapshots preservam o que foi contratado |
+| `appointment_notifications` | `id`, `appointment_id`, `kind`, `status`, `attempts`, `sent_at` nullable, `last_error_code` nullable, timestamps | Notificação transacional de confirmação. `kind=confirmation`; par `(appointment_id, kind)` único; status `pending`, `sent`, `failed` ou `skipped`. Gerar URL assinada no envio/reenvio; sem payload cifrado. Sem dados sensíveis no erro |
+
+Não criar tabela de clientes no MVP: cada reserva guarda o contato daquele atendimento. Isso evita transformar “sem conta” em um cadastro implícito com deduplicação ainda não definida. `jobs` e `failed_jobs`, se usadas com fila de banco, são infraestrutura do Laravel, não entidades do produto.
+
+### Relacionamentos
+
+| Origem | Relação | Destino |
+| --- | --- | --- |
+| Profissional | N:N | Serviço, por `professional_service` |
+| Profissional | 1:N | Períodos de expediente |
+| Profissional | 1:N | Bloqueios |
+| Profissional | 1:N | Agendamentos |
+| Serviço | 1:N | Agendamentos |
+| Agendamento | 1:N | Notificações; no MVP, uma confirmação lógica |
+
+### Índices e integridade
+
+- `users.email`: único.
+- `professional_service(professional_id, service_id)`: único.
+- `working_hours(professional_id, weekday, start_time)`: índice.
+- `schedule_blocks(professional_id, starts_at, ends_at)`: índice para consulta de intervalos.
+- `appointments(professional_id, starts_at)`: índice para agenda e conflitos; incluir análise do plano de execução quando existir volume real.
+- `appointments.public_id`: único; `appointments.idempotency_key`: único.
+- `appointments(customer_email, status, starts_at)` e `(customer_phone, status, starts_at)`: índices para teto por contato.
+- `appointment_notifications(appointment_id, kind)`: único.
+- FKs de agendamentos com exclusão restrita para serviços/profissionais. Não apagar reservas pela interface.
+- Validar intervalos, preço e duração no servidor; adicionar checks de banco compatíveis com a versão selecionada na etapa 2.
+
+## 5. Disponibilidade e prevenção de reservas simultâneas
+
+Um candidato é válido quando: serviço/profissional ativos e vinculados; início dentro do horizonte e, no público, da antecedência mínima; no admin, permitir início imediato calculado pelo servidor; intervalo completo contido num período de expediente; nenhuma interseção com bloqueios ou reservas não canceladas.
+
+Exemplo: serviço de 45 minutos, expediente 09h–12h e 13h–18h, reserva 10h–10h45. 09h15–10h é permitido; 09h30–10h15 conflita; 11h30–12h15 atravessa o intervalo de almoço e é recusado.
+
+Tratar intervalos como `[início, fim)`: um atendimento que termina às 10h permite outro às 10h. Há conflito quando:
+
+```text
+existente.starts_at < novo.ends_at
+AND existente.ends_at > novo.starts_at
+```
+
+Um índice único em `(professional_id, starts_at)` não evita sobreposição entre durações diferentes. A checagem e inserção precisam estar na mesma transação:
+
+1. Validar formato e chave de idempotência.
+2. Obter primeiro o lock do registro único de `business_settings`, depois o lock do profissional. Todos os caminhos que alteram a agenda ou seus cadastros seguem essa ordem; em operações com vários profissionais, travar em ordem de ID.
+3. Repetição idempotente com o mesmo fingerprint retorna a reserva existente antes de verificar o teto. Chave reaproveitada com outro payload é recusada.
+4. Ler dados atuais, conferir expediente, duração, vínculo, bloqueios e conflitos. Na criação pública, contar reservas futuras confirmadas separadamente por e-mail e telefone; recusar se qualquer contagem já atingiu o teto.
+5. Criar reserva e, apenas se houver e-mail e o início ainda for futuro, notificação `pending` na mesma transação. Fazer commit.
+6. Enviar fora da transação. Falha de e-mail não desfaz a reserva; varredura periódica recupera notificações pendentes.
+
+O lock de `business_settings` é uma escolha simples para este MVP: serializa alterações curtas de agenda de toda a barbearia e garante o teto mesmo para requisições em profissionais diferentes, sem uma tabela extra de contatos. Isso reduz concorrência de escrita, mas é aceitável como proposta para uma barbearia pequena. Não manter a transação aberta durante envio de e-mail. Se houver necessidade real de escala, substituir esse lock global por locks por contato e revisar o protocolo com testes.
+
+O lock por profissional permanece explícito para reservas, cancelamentos, bloqueios e expediente. Fechamento geral e alterações em serviço compartilhado podem afetar vários profissionais; não é correto afirmar que apenas o fechamento exige essa coordenação. Ordem de ID e retry limitado de deadlock bastam como contrato inicial; os detalhes serão definidos com os testes da implementação.
+
+Base técnica consultada: [MySQL — Locking Reads](https://dev.mysql.com/doc/refman/8.0/en/innodb-locking-reads.html) e [Laravel — Query Builder / Pessimistic Locking](https://laravel.com/docs/9.x/queries#pessimistic-locking). A versão concreta da stack será definida na etapa 2; o link do Laravel documenta o mecanismo, não fixa essa versão para o projeto.
+
+## 6. Cancelamento e e-mail
+
+- `public_id` é um ULID público único. Não é um segredo nem autoriza consulta/cancelamento sozinho.
+- Gerar URL com `temporarySignedRoute`, expirando em `starts_at`; verificar assinatura e expiração em GET e POST. Não persistir hash de token, expiração de token ou payload cifrado. A assinatura usa a chave da aplicação Laravel, que continua sendo um segredo necessário.
+- Reenvio gera uma URL assinada novamente; não revoga URLs anteriores válidas. A revogação funcional é a checagem de status e início. Remarcação continua sendo uma nova reserva; não reabrir reserva cancelada.
+- Aplicar também `now < starts_at - cancel_min_notice_minutes` no POST. Com padrão 0, cancelamento permitido só antes do início. Mudança da configuração vale para cancelamentos futuros, inclusive links já emitidos. A expiração da assinatura continua em `starts_at`, permitindo explicar na tela por que o prazo para cancelar acabou.
+- GET mostra resumo mínimo sem contatos pessoais; POST explícito cancela. Scanners de e-mail não cancelam por abrir o link. Repetição válida mostra “já cancelado”; assinatura inválida/expirada não revela a reserva.
+- Para evitar divergência de host/path entre React e API, o link assinado aponta inicialmente para a rota Laravel `/cancelar/{public_id}`. GET serve uma página mínima e POST usa o mesmo path/query assinados e proteção CSRF. Não reescrever o link para o host do React. As demais telas permanecem em React.
+- Cancelamento libera horário, registra data/autor e não apaga histórico. O admin autenticado usa rota própria e pode cancelar enquanto `confirmed`, sem depender de assinatura pública ou antecedência mínima.
+- E-mail contém serviço, profissional, data/hora no fuso da barbearia, endereço, preço e link de cancelamento.
+- Não criar notificação sem e-mail. No modo “Atender agora”, não enviar confirmação com link já expirado. Antes do envio/reenvio, conferir reserva confirmada e futura; caso contrário, marcar `skipped`. Reutilizar a notificação lógica; entrega externa pode se repetir após timeout do provedor.
+- Dados de cliente são privados; aplicar rate limits e evitar exposição de assinatura, e-mail e telefone em logs.
+
+Referência: [Laravel — Signed URLs](https://laravel.com/framework/docs/10.x/urls#signed-urls).
+
+## 7. Alterações de cadastro sem quebrar reservas
+
+- Editar preço, nome ou duração de serviço afeta apenas novas reservas. A reserva existente mantém seus snapshots e fim calculado na criação.
+- Desativar serviço/profissional ou remover vínculo impede novas reservas; manter os agendamentos existentes na agenda e informar ao administrador que precisam de tratamento manual, se necessário.
+- Criar bloqueio em cima de reserva confirmada é recusado; exibir os conflitos. Não cancelar silenciosamente.
+- Reduzir expediente de modo que exclua uma reserva futura confirmada é recusado; permitir correção após cancelamento explícito dessa reserva.
+- Fuso horário permanece fixo após a primeira reserva neste MVP para evitar reinterpretar o expediente e os agendamentos existentes.
+
+## 8. Testes que orientarão a implementação
+
+| Área | Evidência esperada |
+| --- | --- |
+| Disponibilidade | Durações diferentes, almoço, limite de expediente, dia fechado, bloqueio parcial/integral, antecedência e horizonte |
+| Concorrência | Em MySQL real, duas conexões/requisições simultâneas para intervalos sobrepostos: exatamente uma reserva e outra resposta de conflito; profissionais diferentes permitidos |
+| Corrida com bloqueio | Reserva versus criação de bloqueio: apenas um pode ocupar o intervalo; o outro recebe conflito |
+| Idempotência | Repetir mesmo payload/chave retorna a mesma reserva; reutilizar chave com outro payload é recusado |
+| Cancelamento | GET não altera estado; POST válido cancela; repetição é inofensiva; assinatura adulterada/expirada, ULID sem assinatura e prazo de cancelamento vencido são recusados |
+| Notificação | Falha de envio mantém reserva e permite retry; rollback não cria confirmação; pendência é recuperada após falha no despacho |
+| Teto por contato | E-mail normalizado e telefone E.164; contatos tratados separadamente; com duas reservas existentes e duas criações simultâneas em profissionais distintos, apenas uma terceira é aceita; replay idempotente continua funcionando |
+| Atendimento imediato | Admin sem e-mail/telefone pode iniciar agora dentro do expediente; público mantém contatos obrigatórios e antecedência; ausência de notificação no atendimento imediato |
+| Histórico | Alterar serviço não modifica valor/duração da reserva; desativação não apaga dados |
+| Autorização | Público não acessa clientes, agenda interna ou CRUD; administrador autenticado pode operar |
+| React | Voltar preserva dados; mudar serviço/profissional invalida horário; conflito atualiza opções e mantém contato; mobile e teclado funcionam |
+| E2E | Cadastrar serviço/profissional/expediente → reservar → confirmar → cancelar → horário voltar a aparecer |
+
+Backend: testes de unidade para cálculos e testes de integração para banco/API; concorrência obrigatoriamente com MySQL, não SQLite. Frontend: testes dos comportamentos relevantes; E2E com uma ferramenta escolhida na fundação técnica.
+
+## 9. Ligação com as sete etapas
+
+| Etapa | Entrega e condição de avanço |
+| --- | --- |
+| 1. Planejamento | Este mapa, regras e modelo; próximo passo: wireframes de horário público, agenda admin e cancelamento; ER e contrato inicial da API |
+| 2. Fundação técnica | Repositório, Docker, autenticação administrativa, migrations, seed, fila/e-mail local e CI com MySQL real; smoke tests de banco desde esta etapa e testes de concorrência entrando assim que implementados na etapa 4 |
+| 3. Cadastros | Serviços, profissionais, vínculos e expediente funcionando com validação |
+| 4. Disponibilidade | Motor de horários, bloqueios e testes de limites/concorrência |
+| 5. Agendamento público | Jornada completa, idempotência, confirmação por e-mail e cancelamento por link |
+| 6. Operação da agenda | Agenda diária, reserva pelo admin, detalhes e transições de status |
+| 7. Publicação | Ambiente público, dados fictícios, documentação de execução, validação do CI já existente e demonstração dos cenários principais |
+
+O resultado de portfólio deve demonstrar regras de negócio e evidências dos testes, além das telas. Dados publicados e contas de demonstração serão fictícios.
+
+
+## 10. Diagrama ER
+
+Separado em duas vistas para facilitar a leitura. IDs de relação são internos; `public_id` identifica a reserva externamente, sem substituir assinatura ou autenticação.
+
+```mermaid
+erDiagram
+    PROFESSIONALS ||--o{ PROFESSIONAL_SERVICE : oferece
+    SERVICES ||--o{ PROFESSIONAL_SERVICE : pertence
+    PROFESSIONALS ||--o{ APPOINTMENTS : atende
+    SERVICES ||--o{ APPOINTMENTS : contratado
+    APPOINTMENTS {
+        bigint id PK
+        char public_id UK
+        bigint professional_id FK
+        bigint service_id FK
+        datetime starts_at
+        datetime ends_at
+        string status
+    }
+```
+
+```mermaid
+erDiagram
+    PROFESSIONALS ||--o{ WORKING_HOURS : trabalha
+    PROFESSIONALS ||--o{ SCHEDULE_BLOCKS : indisponivel
+    APPOINTMENTS ||--o{ APPOINTMENT_NOTIFICATIONS : notifica
+```
+
+`users` e `business_settings` são independentes, sem FKs neste MVP. O diagrama é conceitual; tipos e tamanhos exatos serão definidos nas migrations.
+
+## 11. Contrato inicial da API
+
+API versionada sob `/api/v1`. Instantes em ISO 8601 com offset explícito; a API retorna UTC. Datas do calendário são interpretadas no fuso da barbearia. Horário final, preço, duração, status e origem são determinados pelo servidor.
+
+| Método / endpoint | Entrada | Resposta e regras |
+| --- | --- | --- |
+| `GET /public/availability` | Query `service_id`, `professional_id`, `date` (`YYYY-MM-DD`) | `200`: `timezone`, `date`, `slots` com `starts_at` e `ends_at`. Sem horários: `slots: []`. Não retorna clientes ou motivos internos de bloqueio. `422` para formato/incompatibilidade inválidos |
+| `POST /public/appointments` | Header `Idempotency-Key`; corpo abaixo | `201`: reserva criada, `public_id`, resumo e `notification_status`. Replay idempotente: `200`, mesmo resultado de negócio, sem nova reserva ou e-mail |
+| `POST /admin/appointments` | Sessão admin, mesmo header; `mode=scheduled` com `starts_at` ou `mode=now` sem `starts_at`; nome obrigatório e contatos opcionais | `201`, sem antecedência/teto públicos; horário de `now` calculado pelo servidor sob transação. Mesmas regras de expediente/conflito |
+| `GET /cancelar/{public_id}` | Query assinada `expires` e `signature` | Fora do prefixo API, página Laravel de confirmação. Sem mutação. `403` para assinatura inválida/expirada |
+| `POST /cancelar/{public_id}` | Mesmo path/query assinados + CSRF | Cancela ou informa “já cancelado”; recusa prazo/status inválido. Redireciona para GET assinado após sucesso para evitar reenvio de formulário |
+
+Exemplo de criação pública:
+
+```json
+{
+  "service_id": 1,
+  "professional_id": 2,
+  "starts_at": "2026-10-10T10:00:00-03:00",
+  "customer_name": "Cliente Demonstração",
+  "customer_email": "cliente@example.com",
+  "customer_phone": "+5511999999999"
+}
+```
+
+Erros JSON dos endpoints API: `{ "error": { "code": "...", "message": "...", "fields": {} } }`. `fields` é usado apenas para validação. Não revelar reservas existentes ou dados de outro cliente nos erros.
+
+| HTTP | Código de negócio | Comportamento da interface |
+| --- | --- | --- |
+| 409 | `SLOT_UNAVAILABLE` | Atualizar horários e preservar dados do cliente |
+| 409 | `CONTACT_LIMIT_REACHED` | Explicar que há limite de reservas futuras e oferecer contato com a barbearia; não confirmar se um contato específico existe |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | Não repetir com payload alterado; gerar nova chave para uma nova intenção de reserva |
+| 422 | `VALIDATION_ERROR` | Mostrar erro junto ao campo |
+| 429 | `RATE_LIMITED` | Orientar aguardar; respeitar `Retry-After` |
+| 401 | `UNAUTHENTICATED` | Encaminhar admin ao login |
+
+Uma chave representa uma intenção de reserva. Reutilizar em retry de rede com o mesmo payload; gerar outra ao alterar serviço, profissional ou horário. Endpoints públicos e admin compartilham unicidade de chave e vinculam o fingerprint ao contexto público/admin para impedir replay cruzado. Não aceitar preço/fim/origem do navegador. Um ID público sozinho não permite consultar dados da reserva.
+
+## 12. Wireframes prioritários — composição para desenho
+
+| Tela | Desktop | Celular | Estados a desenhar |
+| --- | --- | --- | --- |
+| Horário público (passo 3) | Calendário e grade de horários à esquerda; resumo à direita; voltar/continuar abaixo | Data, horários, resumo compacto e ações empilhados | Carregando, horários livres, dia vazio, erro de rede com retry e conflito após confirmação |
+| Agenda admin | Cabeçalho com data/filtros/novo; coluna de horários e colunas por profissional; bloqueios marcados | Data e filtro acima de lista cronológica; cards com profissional, cliente, serviço e status | Dia vazio, reserva, bloqueio, detalhe aberto e ação “Atender agora” |
+| Cancelamento | Card central com serviço, profissional, data/hora e ação explícita | Mesmo card ajustado à largura | Pode cancelar, prazo encerrado, já cancelado, sucesso e link inválido/expirado |
+
+Esta seção define a composição; ainda não são protótipos visuais nem telas implementadas.
