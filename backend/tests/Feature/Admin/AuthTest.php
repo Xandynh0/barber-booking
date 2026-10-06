@@ -294,6 +294,17 @@ class AuthTest extends TestCase
 
         $this->primeCsrf();
 
+        // Laravel's own CSRF middleware (PreventRequestForgery::handle())
+        // skips verification entirely whenever runningUnitTests() is true —
+        // i.e. whenever APP_ENV=testing, which is this suite's own default.
+        // Without this override, this assertion would silently pass for the
+        // wrong reason (CSRF never even runs) instead of proving the
+        // middleware rejects a request missing a valid token. Forcing 'env'
+        // to something other than 'testing' for this one request makes the
+        // middleware actually execute its check, which is the real claim
+        // being tested here.
+        $this->app->instance('env', 'production');
+
         // Valid session cookie present, but no X-XSRF-TOKEN header — the
         // stateful CSRF middleware (Sanctum's EnsureFrontendRequestsAreStateful
         // + ValidateCsrfToken) must reject this before it ever reaches the
