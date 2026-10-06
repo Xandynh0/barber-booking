@@ -1,0 +1,25 @@
+:root {
+  --color-cream: #f3ead9;
+  --color-cream-dark: #e8dcc3;
+  --color-maroon: #6e1423;
+  --color-maroon-dark: #4c0e18;
+  --color-black: #1c1a17;
+  --color-brass: #b08d57;
+
+  color-scheme: light;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-cream);
+  color: var(--color-black);
+}
+
+#root {
+  min-height: 100vh;
+}
