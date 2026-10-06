@@ -291,8 +291,11 @@ Esta seção registra o que foi efetivamente implementado nas etapas de fundaç�
 - `business_settings`: singleton criado via `BusinessSettingsSeeder` com os valores desta seção 4 (`America/Sao_Paulo`, 60, 30, 0, 3). Sem tela nem endpoint de edição ainda — só leitura interna (lock) pelas rotas abaixo.
 - Serviços — `GET/POST /api/v1/admin/services`, `PATCH /api/v1/admin/services/{id}`.
 - Profissionais — `GET/POST /api/v1/admin/professionals`, `PATCH /api/v1/admin/professionals/{id}`, incluindo vínculo N:N com serviços (`professional_service`).
+- `business_settings`: leitura via `GET /api/v1/admin/business-settings` (ainda sem edição — ver abaixo).
+- Expediente semanal — `GET/PUT /api/v1/admin/professionals/{id}/working-hours` (`working_hours`).
+- Bloqueios — `GET/POST /api/v1/admin/schedule-blocks`, `DELETE /api/v1/admin/schedule-blocks/{id}`, `DELETE /api/v1/admin/schedule-blocks/groups/{group_id}` (`schedule_blocks`, com `group_id` para fechamentos da barbearia — ver seção 14).
 
-**Ainda não implementado (planejado para etapas futuras):** expediente (`working_hours`), bloqueios (`schedule_blocks`), disponibilidade, catálogo público, agendamentos (`appointments`), notificações, cancelamento por link, e tela/endpoint de edição de `business_settings`.
+**Ainda não implementado (planejado para etapas futuras):** disponibilidade, catálogo público, agendamentos (`appointments`), notificações, cancelamento por link, e tela/endpoint de **edição** de `business_settings` (a leitura já existe).
 
 ### Serviços — `/api/v1/admin/services`
 
@@ -352,3 +355,85 @@ Exemplo de objeto de profissional:
 ### Trava de concorrência (lock de `business_settings`)
 
 Toda criação/edição de serviço, profissional ou vínculo abre uma transação cujo primeiro passo é `SELECT ... FOR UPDATE` na única linha de `business_settings`, antes de qualquer leitura de negócio (ex.: conferir se os `service_ids` existem). Implementação pequena e explícita — chamada direta a `BusinessSettings::query()->lockForUpdate()->first()` dentro de cada `DB::transaction()`, sem abstração nem lock por profissional nesta entrega, seguindo a estratégia da seção 5. Uma alteração de vínculos inválida (IDs inexistentes/duplicados) não aplica nenhuma mudança — nem nome, nem os demais campos — porque a validação de existência roda antes de qualquer `save()`/`sync()` dentro da mesma transação.
+
+## 14. Contratos implementados — Expediente semanal e bloqueios
+
+Complementa a seção 4 (`working_hours`, `schedule_blocks`) e a seção 5 (estratégia de lock). Detalhes de implementação, decisões e roteiro de teste manual ficam em `docs/desenvolvimento.md`.
+
+### Expediente — `/api/v1/admin/professionals/{id}/working-hours`
+
+| Método | Rota | Corpo | Resposta |
+| --- | --- | --- | --- |
+| `GET` | `/professionals/{id}/working-hours` | — | `200` `{"data": {"professional_id", "days": [...]}}` |
+| `PUT` | `/professionals/{id}/working-hours` | `{"days": [...]}` (os 7 dias, sempre) | `200` com o mesmo formato |
+
+`days` é sempre um array de exatamente 7 entradas, uma por `weekday` (0 = domingo .. 6 = sábado, cada uma aparecendo exatamente uma vez), cada uma com `periods`: um array de `{"start_time": "HH:MM", "end_time": "HH:MM"}`. Um dia com `periods: []` é folga. Isso é uma substituição completa (full replace) por profissional a cada `PUT` — não existe PATCH parcial por dia; o cliente sempre envia a semana inteira, o que é o que torna a estratégia "apaga tudo e recria" atômica e segura (ver abaixo).
+
+Validado antes de qualquer transação (formato puro, sem leitura de banco): `start_time < end_time` em cada período; períodos do mesmo dia não podem se sobrepor (adjacentes são permitidos: fim de um igual ao início do outro); nenhum período atravessa a meia-noite (não representável neste formato, já que não há componente de data). `404 NOT_FOUND` se o profissional não existir (route-model binding, mesmo contrato já estabelecido).
+
+Exemplo de objeto de dia:
+
+```json
+{
+  "weekday": 1,
+  "periods": [
+    { "start_time": "09:00", "end_time": "12:00" },
+    { "start_time": "13:00", "end_time": "18:00" }
+  ]
+}
+```
+
+### Bloqueios — `/api/v1/admin/schedule-blocks`
+
+| Método | Rota | Corpo | Resposta |
+| --- | --- | --- | --- |
+| `GET` | `/schedule-blocks` | — | `200` `{"data": [...]}`, todos os bloqueios, ordenados por `starts_at` |
+| `POST` | `/schedule-blocks` | `scope`, `professional_id?`, `starts_at`, `ends_at`, `reason?` | `201` `{"data": {...}}` — um item (individual ou fechamento agrupado) |
+| `DELETE` | `/schedule-blocks/{id}` | — | `204` — remove uma linha individual |
+| `DELETE` | `/schedule-blocks/groups/{group_id}` | — | `204` — remove todas as linhas de um fechamento, atomicamente |
+
+`scope` é `"professional"` (requer `professional_id`) ou `"shop"` (fecha a barbearia inteira para o intervalo — nenhum profissional atende; `professional_id` não deve ser enviado). Um bloqueio `"shop"` continua **não sendo uma linha própria**: o servidor cria, numa única transação atômica, um `schedule_blocks` por profissional existente no momento da criação, exatamente como esta seção já especificava ("criar bloqueios para todos os profissionais numa operação atômica"). A partir desta revisão, toda linha criada por uma mesma chamada `scope: "shop"` recebe o mesmo `group_id` (ULID) — usado só para reconhecer e remover o fechamento como uma única operação, nunca como uma entidade própria com seu próprio ciclo de vida. Linhas com `scope: "professional"` têm `group_id` nulo.
+
+A API expõe dois **formatos de item**, tanto no `GET` quanto no `POST`, diferenciados pelo campo `kind`:
+
+```json
+{
+  "kind": "professional",
+  "id": 10,
+  "professional": { "id": 1, "name": "Lucas" },
+  "starts_at": "2026-12-24T21:00:00+00:00",
+  "ends_at": "2026-12-26T11:00:00+00:00",
+  "reason": "Feriado prolongado"
+}
+```
+
+```json
+{
+  "kind": "shop",
+  "group_id": "01M481J2MVXTXKYF7QMCJB4PZ2",
+  "professionals": [{ "id": 1, "name": "Lucas" }, { "id": 2, "name": "João" }],
+  "starts_at": "2026-12-25T03:00:00+00:00",
+  "ends_at": "2026-12-26T03:00:00+00:00",
+  "reason": "Natal"
+}
+```
+
+Um item `"shop"` representa **todas** as linhas daquele `group_id` agrupadas; a listagem nunca mostra as linhas individualmente quando elas pertencem a um grupo. `DELETE /schedule-blocks/groups/{group_id}` remove todas as linhas daquele grupo numa única transação (sob o mesmo lock de `business_settings`) — os profissionais cobertos ficam liberados do fechamento; outros bloqueios que coincidam com o mesmo período (individuais ou de outro grupo) não são afetados.
+
+**Opção "dia inteiro":** ao fechar a barbearia para um dia específico, o intervalo corresponde à meia-noite desse dia até a meia-noite do dia seguinte, no fuso da barbearia, com fim exclusivo — calculado e convertido para UTC pelo cliente antes do envio (mesma convenção de instantes da seção 11); o servidor não distingue esse caso de um intervalo personalizado qualquer.
+
+**Limitação documentada:** um fechamento `"shop"` abrange os profissionais que existiam no momento da criação. Um profissional cadastrado depois **não** é incluído retroativamente em fechamentos já criados — não há sincronização automática nesta entrega. Se isso for necessário, o fechamento precisa ser recriado, ou essa sincronização vira um recurso futuro explícito.
+
+`starts_at`/`ends_at` seguem a convenção já estabelecida na seção 11: ISO 8601 com offset explícito na entrada, UTC na resposta. Podem atravessar dias (sem limite de duração). `início < fim` obrigatório (`422` caso contrário). Sobreposição entre bloqueios **é permitida** — a especificação não proíbe (seção 4 não define essa regra), então múltiplos bloqueios (individuais ou de grupos diferentes) podem cobrir o mesmo intervalo sem erro.
+
+**Linhas anteriores a esta revisão** (`group_id` nulo) permanecem individuais para sempre — não há agrupamento retroativo por semelhança de data/motivo, nem migração que as reinterprete. A coluna `group_id` é aditiva e nula por padrão; nenhuma linha existente foi apagada ou recriada para introduzi-la.
+
+Erros: `422 VALIDATION_ERROR` (datas inválidas, `professional_id` ausente/presente incorretamente para o `scope`, ou inexistente), `404 NOT_FOUND` (id ou `group_id` inexistente no `DELETE`).
+
+### Leitura de `business_settings` — `/api/v1/admin/business-settings`
+
+`GET` apenas, retorna o registro singleton inteiro (`name`, `address`, `phone`, `timezone`, `min_notice_minutes`, `booking_horizon_days`, `cancel_min_notice_minutes`, `max_active_per_contact`). Adicionado nesta entrega porque o frontend de bloqueios precisa do fuso horário da barbearia para converter data/hora local em UTC sem depender do fuso do navegador. Ainda não existe edição (`PATCH`/`PUT`) — meramente leitura.
+
+### Trava de concorrência — mesma estratégia, sem lock por profissional
+
+Expediente e bloqueios seguem exatamente o mesmo padrão já estabelecido para serviços/profissionais: `BusinessSettings::query()->lockForUpdate()->first()` como primeira operação de negócio dentro de cada `DB::transaction()`, antes de qualquer leitura (ex.: existência do `professional_id` em bloqueios, ou a lista de todos os profissionais num fechamento geral). Nenhum lock por profissional foi adicionado — a especificação (seção 5) reserva essa necessidade para reservas, que não existem nesta entrega.

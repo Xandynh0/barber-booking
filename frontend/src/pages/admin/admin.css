@@ -177,6 +177,76 @@
   outline-offset: 1px;
 }
 
+.admin-field select {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  background: var(--color-cream);
+  color: var(--color-black);
+}
+
+.admin-field select:focus-visible {
+  outline: 3px solid var(--color-maroon);
+  outline-offset: 1px;
+}
+
+.admin-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.admin-radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.admin-hint {
+  font-size: 0.8rem;
+  opacity: 0.75;
+  margin: 0;
+}
+
+.admin-day-row {
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  padding: 0.75rem;
+  background: var(--color-cream);
+}
+
+.admin-day-row + .admin-day-row {
+  margin-top: 0.75rem;
+}
+
+.admin-day-row h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--color-maroon);
+}
+
+.admin-day-off {
+  font-size: 0.9rem;
+  opacity: 0.75;
+  margin: 0 0 0.5rem;
+}
+
+.admin-period-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.admin-period-row .admin-field {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+}
+
 .admin-field-checkbox {
   flex-direction: row;
   align-items: center;
