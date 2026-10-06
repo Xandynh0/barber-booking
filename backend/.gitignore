@@ -21,6 +21,11 @@
 /public/storage
 /storage/*.key
 /storage/pail
+# Manual, local-only test data import (docs/desenvolvimento.md, "Importação
+# de dados de teste fictícios") — fixtures and the idempotency manifest are
+# developer-machine-specific, never committed.
+/storage/app/test-data/
+/storage/app/test-data-import-manifest.json
 /vendor
 _ide_helper.php
 Homestead.json
