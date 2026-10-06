@@ -285,37 +285,48 @@ class AuthTest extends TestCase
             ->assertStatus(401);
     }
 
-    public function test_csrf_protection_is_actually_enforced_without_a_valid_token(): void
+    public function test_csrf_protection_rejects_a_missing_token_and_accepts_a_valid_one(): void
     {
         User::factory()->create([
             'email' => 'admin@barberbooking.test',
             'password' => 'correct-horse-battery-staple',
         ]);
 
-        $this->primeCsrf();
+        $xsrf = $this->primeCsrf();
 
         // Laravel's own CSRF middleware (PreventRequestForgery::handle())
         // skips verification entirely whenever runningUnitTests() is true —
-        // i.e. whenever APP_ENV=testing, which is this suite's own default.
-        // Without this override, this assertion would silently pass for the
-        // wrong reason (CSRF never even runs) instead of proving the
-        // middleware rejects a request missing a valid token. Forcing 'env'
-        // to something other than 'testing' for this one request makes the
-        // middleware actually execute its check, which is the real claim
-        // being tested here.
+        // i.e. whenever APP_ENV=testing, which phpunit.xml forces for this
+        // whole suite (including in Docker — see the comment there). Without
+        // this override, both assertions below would pass for the wrong
+        // reason (CSRF never even runs) instead of proving the middleware
+        // actually rejects/accepts based on the token. This override is
+        // scoped to this one test; every other test in the suite still runs
+        // under the normal APP_ENV=testing behavior.
         $this->app->instance('env', 'production');
 
-        // Valid session cookie present, but no X-XSRF-TOKEN header — the
+        // 1) Valid session cookie present, but no X-XSRF-TOKEN header — the
         // stateful CSRF middleware (Sanctum's EnsureFrontendRequestsAreStateful
         // + ValidateCsrfToken) must reject this before it ever reaches the
         // controller, proving the middleware is active, not bypassed.
-        $response = $this->withHeaders(['Referer' => self::STATEFUL_ORIGIN])
+        $rejected = $this->withHeaders(['Referer' => self::STATEFUL_ORIGIN])
             ->postJson('/api/v1/admin/login', [
                 'email' => 'admin@barberbooking.test',
                 'password' => 'correct-horse-battery-staple',
             ]);
 
-        $response->assertStatus(419);
+        $rejected->assertStatus(419);
+
+        // 2) Same session, this time with the valid X-XSRF-TOKEN header the
+        // priming request issued — must be accepted. Proves the middleware
+        // discriminates on the token itself, not just rejecting everything.
+        $accepted = $this->withHeaders($this->statefulHeaders($xsrf))
+            ->postJson('/api/v1/admin/login', [
+                'email' => 'admin@barberbooking.test',
+                'password' => 'correct-horse-battery-staple',
+            ]);
+
+        $accepted->assertOk();
     }
 
     public function test_login_throttles_by_ip_and_normalized_email(): void

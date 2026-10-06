@@ -63,7 +63,7 @@ Serviços:
 
 | Serviço | Acesso | Descrição |
 | --- | --- | --- |
-| `proxy` | http://localhost:8080 | ponto único de entrada: `/` → frontend, `/api/*` e `/up` → backend |
+| `proxy` | http://localhost:8080 | ponto único de entrada: `/` → frontend, `/api/*`, `/up` e `/sanctum/*` → backend |
 | `mysql` | localhost:3307 (host) | banco de dados; porta interna 3306 |
 | `mailpit` | http://localhost:8025 | interface web dos e-mails capturados |
 
@@ -74,6 +74,25 @@ docker compose ps
 ```
 
 Todos devem aparecer como `healthy` (frontend e backend podem levar alguns segundos até o healthcheck passar).
+
+## Atualizando dependências
+
+**`docker compose build` sozinho não basta** quando se adiciona/remove uma dependência do frontend. O serviço `frontend` monta `./frontend:/app` e também um volume nomeado `frontend_node_modules:/app/node_modules` — esse segundo volume existe para isolar o `node_modules` do host (evita conflito de binários entre SO), mas ele **persiste entre `docker compose up`/`build`/`restart`**, exatamente como o volume do MySQL. Isso significa que o `node_modules` gerado dentro da imagem no `build` fica **sombreado** pelo conteúdo antigo do volume assim que o container sobe — um `npm install` que só rodou durante o build nunca chega a ser visto em runtime.
+
+Foi exatamente isso que causou `Failed to resolve import "react-router-dom"` no navegador depois que a dependência foi adicionada nesta entrega: o volume `frontend_node_modules` já existia de uma subida anterior (sem `react-router-dom`), e continuou sendo montado por cima do `node_modules` recém-buildado.
+
+Procedimento correto ao adicionar/atualizar uma dependência do frontend:
+
+```sh
+cd frontend && npm install <pacote>   # atualiza package.json/package-lock.json no host
+docker compose build frontend          # reconstrói a imagem (opcional se só for sincronizar o volume)
+docker compose exec frontend npm install   # sincroniza o volume frontend_node_modules com o lockfile atual
+docker compose restart frontend        # Vite precisa reiniciar para enxergar o pacote novo
+```
+
+O terceiro passo é o que resolve de fato — ele roda `npm install` dentro do container, escrevendo no mesmo volume que fica montado em runtime. Não é necessário (nem recomendado) remover o volume com `docker compose down -v`: isso apagaria o volume do MySQL junto.
+
+Para o backend, não há esse problema: `composer install`/`require` já é executado diretamente dentro do container via bind mount (`./backend:/var/www/html`), sem um volume extra sombreando `vendor/`.
 
 ## Migrations
 
@@ -185,7 +204,7 @@ REPEATABLE-READ
 
 ### Testes de autenticação administrativa
 
-`backend/tests/Feature/Admin/AuthTest.php` exercita o fluxo real de SPA auth do Sanctum (sessão + cookie + CSRF) de ponta a ponta — sem `Sanctum::actingAs()` e sem middleware desabilitado, então um teste passando aqui prova que o CSRF está ativo de verdade, não apenas presumido. 11 testes, incluindo:
+`backend/tests/Feature/Admin/AuthTest.php` exercita o fluxo real de SPA auth do Sanctum (sessão + cookie + CSRF) de ponta a ponta — sem `Sanctum::actingAs()` e sem middleware desabilitado. 11 testes, incluindo:
 
 - login válido (identidade retornada, sessão regenerada — comparado o ID de sessão decriptado antes/depois, não o cookie cru, que muda a cada resposta só pela criptografia usar IV aleatório);
 - normalização de e-mail (maiúsculas/espaços) no login;
@@ -193,14 +212,18 @@ REPEATABLE-READ
 - validação de campos (`422`);
 - `/me` sem sessão (`401 UNAUTHENTICATED`) e após login (`200`);
 - logout: `204`, sessão anterior rejeitada numa chamada seguinte a `/me`;
-- **prova direta de que o CSRF está ativo**: uma requisição com cookie de sessão válido mas sem `X-XSRF-TOKEN` recebe `419`, nunca chega ao controller;
 - os dois limites de tentativas (por e-mail e por IP), incluindo o header `Retry-After`.
 
-Duas pegadinhas de teste que valeram registrar:
+**Importante sobre a prova de CSRF — ela é de UM teste específico, não da suíte inteira.** Por padrão, o middleware de CSRF do próprio Laravel (`PreventRequestForgery::handle()`, por trás do `ValidateCsrfToken` do Sanctum) **pula a verificação inteira** sempre que `$app->runningUnitTests()` é verdadeiro — ou seja, sempre que `APP_ENV=testing`, que é o ambiente desta suíte inteira (forçado em `phpunit.xml`, ver abaixo). Isso significa que, nos outros 10 testes, uma requisição sem `X-XSRF-TOKEN` passaria mesmo assim — não porque o CSRF esteja "ativo e tolerante", mas porque o Laravel simplesmente não o executa em modo de teste. Isso é esperado e não é um problema: esses 10 testes não afirmam nada sobre CSRF, só sobre login/sessão/validação/throttle.
 
-1. **`AuthManager`/`SessionGuard` cacheiam o guard resolvido e o usuário autenticado pela duração do container.** Como várias chamadas HTTP simuladas num mesmo método de teste compartilham esse container, uma chamada feita **depois** do logout continuava "autenticada" nos testes — não porque a sessão real continuasse válida (o stack real via `curl`, com requisições HTTP de verdade, sempre rejeitou corretamente), mas porque o guard em memória nunca era invalidado entre as chamadas simuladas. A correção foi chamar `Auth::forgetGuards()` entre requisições simuladas sempre que o estado de autenticação muda (login/logout) dentro do mesmo teste.
+Só `test_csrf_protection_rejects_a_missing_token_and_accepts_a_valid_one` prova algo sobre CSRF, e só porque ele desliga esse atalho explicitamente: `$this->app->instance('env', 'production')` força o ambiente a deixar de ser `'testing'` só para aquele teste, obrigando o middleware a rodar de verdade. Com isso ligado, o teste verifica as duas direções: uma requisição sem token recebe `419` e a mesma sessão com o token válido (emitido por `/sanctum/csrf-cookie`) recebe `200`. Sem esse override, o teste passaria de qualquer forma — e foi exatamente isso que aconteceu inicialmente: ele passava rodando dentro do Compose "pela razão errada", porque o `env_file` do Docker já injetava `APP_ENV=local` como variável real do container, o que (mesmo mecanismo de "Isolamento entre banco de desenvolvimento e banco de testes") fazia a diretiva não-forçada `<env name="APP_ENV" value="testing"/>` do `phpunit.xml` ser ignorada — então o CSRF ficava ativo por acidente em todo o resto da suíte também, mascarando o atalho do Laravel. Rodando nativamente (mais perto do que o CI faz), `APP_ENV` virava `testing` de verdade, o atalho entrava em ação, e a mesma requisição sem token passava com `200` em vez de `419`.
 
-2. **O CSRF do Laravel se desliga sozinho quando `APP_ENV=testing`.** `PreventRequestForgery::handle()` (a classe por trás do `ValidateCsrfToken` do Sanctum) pula a verificação inteira quando `$app->runningUnitTests()` é verdadeiro — ou seja, sempre que o ambiente resolvido é `testing`. O teste que prova a rejeição por CSRF (`test_csrf_protection_is_actually_enforced_without_a_valid_token`) **passava "pela razão errada" rodando dentro do Compose**: lá, o `env_file` do Docker já injeta `APP_ENV=local` como variável real do container, o que (pelo mesmo mecanismo descrito em "Isolamento entre banco de desenvolvimento e banco de testes") faz a diretiva não-forçada `<env name="APP_ENV" value="testing"/>` do `phpunit.xml` ser ignorada — então o CSRF continuava ativo por acidente. Rodando com PHP nativo (sem Docker, mais perto do que o CI faz), `APP_ENV` vira `testing` de verdade, o atalho do Laravel entra em ação, e a mesma requisição que deveria ser rejeitada passava com `200`. É exatamente assim que o problema apareceu: a suíte passava localmente e falhou no CI. Corrigido fazendo esse único teste forçar `$this->app->instance('env', 'production')` antes da requisição sem token — isso desliga o atalho de conveniência do Laravel só ali, obrigando o middleware a rodar de verdade e provando a rejeição pelo motivo certo.
+Corrigido em duas frentes, para que o comportamento seja o mesmo em qualquer ambiente:
+
+- `phpunit.xml` agora força (`force="true"`) `APP_ENV=testing` — a suíte roda sob o ambiente de teste padrão do Laravel em qualquer lugar (Docker, nativo, CI), em vez de depender do que o `env_file` do Compose injeta por acaso.
+- O teste de CSRF continua desligando esse ambiente explicitamente (`$this->app->instance('env', 'production')`) só para si mesmo — é o único jeito de testar o middleware de verdade dado que o padrão do Laravel é não rodá-lo em teste.
+
+Uma segunda pegadinha de teste que valeu registrar: `AuthManager`/`SessionGuard` cacheiam o guard resolvido e o usuário autenticado pela duração do container. Como várias chamadas HTTP simuladas num mesmo método de teste compartilham esse container, uma chamada feita **depois** do logout continuava "autenticada" nos testes — não porque a sessão real continuasse válida (o stack real via `curl`, com requisições HTTP de verdade, sempre rejeitou corretamente), mas porque o guard em memória nunca era invalidado entre as chamadas simuladas. A correção foi chamar `Auth::forgetGuards()` entre requisições simuladas sempre que o estado de autenticação muda (login/logout) dentro do mesmo teste.
 
 Resultado desta entrega: suíte completa com **15 passed** (11 de autenticação + 4 pré-existentes da fundação técnica), rodando 3× seguidas sem flakiness tanto em Docker quanto via PHP nativo contra o MySQL exposto em `localhost:3307`. Confirmado por contagem de linhas que o banco `barber_booking` (dev) não foi alterado por nenhuma execução.
 
@@ -210,15 +233,16 @@ Qualquer e-mail enviado pelo backend (`MAIL_MAILER=smtp`, `MAIL_HOST=mailpit`) f
 
 ## Verificação manual no navegador
 
-Esta verificação ainda não foi feita com uma ferramenta de automação de navegador (nenhuma disponível neste ambiente). Roteiro para quem for validar manualmente:
+Nenhuma ferramenta de automação de navegador está disponível neste ambiente de desenvolvimento assistido — o que segue é o que já foi confirmado por uma pessoa em um navegador real, e o que ainda falta.
+
+**Já confirmado (homepage, navegador real):** `http://localhost:8080` carrega "Barber Booking", a frase de efeito e o indicador de status mudando para "Conectado". Foi nessa verificação que apareceu o erro `Failed to resolve import "react-router-dom"` corrigido nesta rodada (volume `frontend_node_modules` desatualizado — ver "Atualizando dependências"); depois da correção, a página voltou a carregar sem erros de console.
+
+**Ainda pendente — roteiro para quem for validar o fluxo de admin:**
 
 1. Suba o ambiente (`docker compose up -d --build`) e confirme `docker compose ps` com tudo `healthy`.
-2. Abra `http://localhost:8080` em um navegador desktop.
-   - Confirme que a página mostra "Barber Booking", a frase de efeito e o indicador de status.
-   - Abra o DevTools (console + aba Network) e confirme: sem erros no console; uma chamada `GET /api/health` com `200` e corpo `{"status":"ok"}`; o indicador muda de "Verificando..." para "Conectado".
-3. Repita em uma viewport mobile (DevTools → modo responsivo, ou um celular real na mesma rede apontando para o IP da máquina na porta 8080) e confirme que o layout não quebra e o indicador também chega a "Conectado".
-4. Teste o estado de indisponibilidade: `docker compose stop mysql`, recarregue a página e confirme que o indicador muda para "Indisponível" com uma mensagem genérica (sem detalhes de conexão, host ou driver). Depois rode `docker compose start mysql` para restaurar.
-5. Crie um admin (`docker compose exec backend php artisan admin:create`) e abra `http://localhost:8080/admin/login`.
+2. Repita a checagem da homepage em uma viewport mobile (DevTools → modo responsivo, ou um celular real na mesma rede apontando para o IP da máquina na porta 8080) e confirme que o layout não quebra.
+3. Teste o estado de indisponibilidade: `docker compose stop mysql`, recarregue a página e confirme que o indicador muda para "Indisponível" com uma mensagem genérica (sem detalhes de conexão, host ou driver). Depois rode `docker compose start mysql` para restaurar.
+4. Crie um admin (`docker compose exec backend php artisan admin:create`) e abra `http://localhost:8080/admin/login`.
    - Confirme labels visíveis, foco visível ao navegar por Tab, e que dá para enviar o formulário só pelo teclado (Tab até o botão, Enter).
    - Tente um login errado: confirme mensagem genérica de credenciais inválidas (não deve indicar se o e-mail existe).
    - Deixe campos vazios e envie: confirme erros de validação por campo.
@@ -226,7 +250,7 @@ Esta verificação ainda não foi feita com uma ferramenta de automação de nav
    - Recarregue a página em `/admin/agenda`: confirme um estado de carregamento breve ("Verificando sessão...") antes de mostrar o conteúdo — prova que a checagem usa `/me`, não um estado só local.
    - Clique "Sair": confirme volta para `/admin/login`. Tente recarregar `/admin/agenda` diretamente: confirme que volta para o login (sessão realmente encerrada, não só escondida na UI).
 
-Os passos 1–4 (renderização real em navegador, console, responsivo, indisponibilidade visual) e o passo 5 (fluxo de login real em navegador) seguem pendentes de validação visual — sem ferramenta de automação de navegador disponível neste ambiente. O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), e o fluxo completo de login/sessão/logout/CSRF contra o proxy real.
+O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), e o fluxo completo de login/sessão/logout/CSRF contra o proxy real.
 
 ## Solução de problemas comuns
 
@@ -236,6 +260,7 @@ Os passos 1–4 (renderização real em navegador, console, responsivo, indispon
 | `/api/health` retorna 503 | MySQL ainda subindo ou credenciais divergentes entre `.env` (raiz) e `backend/.env` | aguarde o healthcheck do `mysql` ficar `healthy`; confira se `MYSQL_*` no `.env` raiz bate com o esperado |
 | Testes falham com "Unknown database 'barber_booking_test'" | volume do MySQL já existia antes do banco de testes ser criado | rode o `CREATE DATABASE`/`GRANT` manual da seção Migrations, depois migre o banco de testes |
 | Frontend não atualiza (HMR) ao editar código | variável `VITE_DEV_SERVER_PROXIED` não aplicada | confirme que está acessando via `http://localhost:8080` (porta do proxy) e não diretamente por `5173` |
+| `Failed to resolve import "<pacote>"` no navegador, após instalar uma dependência nova do frontend | volume `frontend_node_modules` com conteúdo antigo, sombreando o `node_modules` da imagem recém-buildada | veja "Atualizando dependências" — rode `docker compose exec frontend npm install` e depois `docker compose restart frontend` |
 | Porta 8080/3307/8025 já em uso | outro serviço local ocupando a porta | ajuste `APP_PORT`, `MYSQL_HOST_PORT` ou `MAILPIT_WEB_PORT` no `.env` da raiz |
 | `composer install` falha por versão do PHP | imagem Docker desatualizada em cache | `docker compose build --no-cache backend` |
 
@@ -244,5 +269,5 @@ Os passos 1–4 (renderização real em navegador, console, responsivo, indispon
 - Sem cadastros de domínio (serviços, profissionais, expediente), disponibilidade, agendamento ou cancelamento. Autenticação administrativa (esta entrega) está implementada; o restante aguarda as próximas etapas.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade.
-- Verificação visual em navegador real (desktop/mobile, console) ainda pendente — ver roteiro manual acima.
+- Homepage confirmada visualmente em navegador real; viewport mobile, estado de indisponibilidade e o fluxo completo de `/admin/login` e `/admin/agenda` ainda pendentes — ver roteiro manual acima.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.
