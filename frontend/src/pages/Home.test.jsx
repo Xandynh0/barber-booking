@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import Home from './Home'
 
-describe('App', () => {
+describe('Home', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
   })
@@ -14,7 +14,7 @@ describe('App', () => {
   it('shows the brand and starts in checking state', () => {
     fetch.mockReturnValue(new Promise(() => {}))
 
-    render(<App />)
+    render(<Home />)
 
     expect(screen.getByText('Barber Booking')).toBeInTheDocument()
     expect(screen.getByText('Verificando...')).toBeInTheDocument()
@@ -26,7 +26,7 @@ describe('App', () => {
       json: async () => ({ status: 'ok' }),
     })
 
-    render(<App />)
+    render(<Home />)
 
     await waitFor(() => expect(screen.getByText('Conectado')).toBeInTheDocument())
   })
@@ -37,7 +37,7 @@ describe('App', () => {
       json: async () => ({ error: { message: 'Serviço indisponível' } }),
     })
 
-    render(<App />)
+    render(<Home />)
 
     await waitFor(() => expect(screen.getByText('Indisponível')).toBeInTheDocument())
     expect(screen.getByText('Serviço indisponível')).toBeInTheDocument()

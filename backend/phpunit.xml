@@ -18,7 +18,14 @@
         </include>
     </source>
     <php>
-        <env name="APP_ENV" value="testing"/>
+        <!-- Forced: same env_file issue as DB_TEST_DATABASE below — docker-compose bakes
+             APP_ENV=local as a real container env var, so a non-forced override here was
+             silently ignored. That let Laravel's own CSRF middleware's test-mode bypass
+             (runningUnitTests(), tied to APP_ENV=testing) go unnoticed in Docker while still
+             triggering elsewhere (native PHP, CI), which is exactly how a CSRF test passed
+             locally for the wrong reason and failed in CI. force="true" makes APP_ENV=testing
+             consistent everywhere this suite runs. -->
+        <env name="APP_ENV" value="testing" force="true"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>
@@ -33,7 +40,14 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <!-- Forced to "database" (not "array") so login/me/logout tests exercise the real
+             MySQL-backed session store, same as production, instead of a driver that would
+             never be used outside tests. -->
+        <env name="SESSION_DRIVER" value="database" force="true"/>
+        <!-- Low, forced limits so rate-limit tests can trip the 429 without waiting a real
+             minute or sending dozens of requests. -->
+        <env name="ADMIN_LOGIN_THROTTLE_PER_EMAIL" value="2" force="true"/>
+        <env name="ADMIN_LOGIN_THROTTLE_PER_IP" value="3" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
