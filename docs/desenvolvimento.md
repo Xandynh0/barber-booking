@@ -110,6 +110,8 @@ docker compose exec -e DB_TEST_DATABASE=barber_booking_test backend php artisan 
 
 `php artisan migrate` nunca reseta dados — ele só aplica as migrations ainda não rodadas (controladas pela tabela `migrations`). As quatro migrations desta entrega (`business_settings`, `services`, `professionals`, `professional_service`) são aditivas; rodar o comando de novo em um banco já migrado não faz nada (`Nothing to migrate.`). **Nunca use `migrate:fresh` ou `migrate:refresh`** no banco de desenvolvimento — ambos apagam todas as tabelas antes de recriar.
 
+> **O banco `barber_booking` é compartilhado entre quem estiver testando manualmente e qualquer verificação automatizada rodada no mesmo ambiente.** Um `\App\Models\User::query()->delete()` (ou equivalente) feito via `tinker` para "limpar" dados de teste apaga **qualquer** usuário existente, inclusive um administrador que outra pessoa tenha acabado de criar para seus próprios testes — não existe isolamento por quem criou o quê. Ao validar algo manualmente neste banco, prefira criar registros com nomes/e-mails claramente de teste e não rodar limpezas em massa (`::query()->delete()`, `truncate`) nas tabelas `users`, `services` ou `professionals` sem confirmar antes que ninguém mais depende do que está lá.
+
 ### Inicializando `business_settings`
 
 O registro único de configuração (seção 4 do planejamento) precisa existir antes de criar serviços/profissionais, porque toda escrita nesses cadastros trava essa linha (`SELECT ... FOR UPDATE`) antes de validar o resto. Ele é criado pelo seeder, não por uma migration (migrations criam estrutura; seeders populam dados) — e o seeder é idempotente, seguro para rodar quantas vezes quiser:
@@ -319,6 +321,7 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 | `Failed to resolve import "<pacote>"` no navegador, após instalar uma dependência nova do frontend | volume `frontend_node_modules` com conteúdo antigo, sombreando o `node_modules` da imagem recém-buildada | veja "Atualizando dependências" — rode `docker compose exec frontend npm install` e depois `docker compose restart frontend` |
 | Porta 8080/3307/8025 já em uso | outro serviço local ocupando a porta | ajuste `APP_PORT`, `MYSQL_HOST_PORT` ou `MAILPIT_WEB_PORT` no `.env` da raiz |
 | `composer install` falha por versão do PHP | imagem Docker desatualizada em cache | `docker compose build --no-cache backend` |
+| Página continua com a versão antiga (ex.: menu novo não aparece) depois de um `docker compose restart frontend` | aba do navegador aberta de antes do restart — a reconexão do WebSocket de HMR do Vite nem sempre força um reload completo da página | dê um hard refresh (Ctrl+Shift+R) ou abra em aba anônima/nova; para confirmar que o servidor está servindo o código certo sem depender do navegador, use `curl http://localhost:8080/src/<arquivo>.jsx` e compare com o arquivo no host |
 
 ## Limitações desta etapa
 
