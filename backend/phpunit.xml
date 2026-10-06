@@ -25,6 +25,11 @@
         <env name="CACHE_STORE" value="array"/>
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
+        <!-- Forced: docker-compose's env_file bakes DB_DATABASE as a real container env var, which a
+             non-forced override here cannot beat. force="true" guarantees the mysql connection
+             (config/database.php) always points at an isolated test database, never the development one,
+             regardless of how the process was launched. -->
+        <env name="DB_TEST_DATABASE" value="barber_booking_test" force="true"/>
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

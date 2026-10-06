@@ -49,7 +49,10 @@ return [
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
-            'database' => env('DB_DATABASE', 'laravel'),
+            // DB_TEST_DATABASE is forced by phpunit.xml so test runs never
+            // touch the development database, even when DB_DATABASE is
+            // already set as a real OS env var (e.g. docker-compose env_file).
+            'database' => env('DB_TEST_DATABASE', env('DB_DATABASE', 'laravel')),
             'username' => env('DB_USERNAME', 'root'),
             'password' => env('DB_PASSWORD', ''),
             'unix_socket' => env('DB_SOCKET', ''),

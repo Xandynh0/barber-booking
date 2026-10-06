@@ -8,9 +8,14 @@ use Tests\TestCase;
 
 /**
  * Proves that two separate MySQL connections do not share an uncommitted
- * transaction. This underpins the locking strategy described in
- * docs/planejamento-barbearia-mvp.md (section 5) and must run against a
- * real MySQL server — it is skipped under the default sqlite test config.
+ * transaction: a basic connection-isolation sanity check, not a proof of
+ * any specific transaction isolation level (see docs/desenvolvimento.md
+ * for the actual @@SESSION.transaction_isolation value observed) and not
+ * a test of the booking-conflict locking strategy described in
+ * docs/planejamento-barbearia-mvp.md (section 5) — that requires two
+ * concurrent writers racing for the same slot, which doesn't exist yet.
+ * Must run against a real MySQL server — it is skipped under the default
+ * sqlite test config.
  */
 class MySqlConnectionIsolationTest extends TestCase
 {
