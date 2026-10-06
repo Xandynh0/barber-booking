@@ -280,3 +280,75 @@ Uma chave representa uma intenção de reserva. Reutilizar em retry de rede com 
 | Cancelamento | Card central com serviço, profissional, data/hora e ação explícita | Mesmo card ajustado à largura | Pode cancelar, prazo encerrado, já cancelado, sucesso e link inválido/expirado |
 
 Esta seção define a composição; ainda não são protótipos visuais nem telas implementadas.
+
+## 13. Contratos implementados — Cadastros administrativos
+
+Esta seção registra o que foi efetivamente implementado nas etapas de fundação técnica, autenticação administrativa e cadastros, em complemento às seções 4 e 11 (que continuam descrevendo a proposta original). Detalhes de uso, exemplos e decisões de implementação ficam em `docs/desenvolvimento.md`; aqui fica só o contrato.
+
+**Já implementado:**
+
+- Autenticação administrativa por sessão/cookie (Sanctum SPA) — `POST /api/v1/admin/login`, `GET /api/v1/admin/me`, `POST /api/v1/admin/logout`, `GET /sanctum/csrf-cookie`. Ver seção "Autenticação administrativa" em `docs/desenvolvimento.md`.
+- `business_settings`: singleton criado via `BusinessSettingsSeeder` com os valores desta seção 4 (`America/Sao_Paulo`, 60, 30, 0, 3). Sem tela nem endpoint de edição ainda — só leitura interna (lock) pelas rotas abaixo.
+- Serviços — `GET/POST /api/v1/admin/services`, `PATCH /api/v1/admin/services/{id}`.
+- Profissionais — `GET/POST /api/v1/admin/professionals`, `PATCH /api/v1/admin/professionals/{id}`, incluindo vínculo N:N com serviços (`professional_service`).
+
+**Ainda não implementado (planejado para etapas futuras):** expediente (`working_hours`), bloqueios (`schedule_blocks`), disponibilidade, catálogo público, agendamentos (`appointments`), notificações, cancelamento por link, e tela/endpoint de edição de `business_settings`.
+
+### Serviços — `/api/v1/admin/services`
+
+Todas as rotas exigem sessão administrativa (`401 UNAUTHENTICATED` sem sessão válida) e, nas mutações, CSRF (ver `docs/desenvolvimento.md`).
+
+| Método | Rota | Corpo | Resposta |
+| --- | --- | --- | --- |
+| `GET` | `/services` | — | `200` `{"data": [...]}`, ativos e inativos, ordenados por `id` |
+| `POST` | `/services` | `name`, `description?`, `duration_minutes`, `price`, `is_active?` | `201` `{"data": {...}}` |
+| `PATCH` | `/services/{id}` | qualquer subconjunto dos campos acima | `200` `{"data": {...}}`; campo omitido mantém o valor atual |
+
+Exemplo de objeto de serviço:
+
+```json
+{
+  "id": 1,
+  "name": "Corte masculino",
+  "description": null,
+  "duration_minutes": 30,
+  "price": "45.00",
+  "is_active": true
+}
+```
+
+`price` é sempre uma **string decimal** (nunca número/float), para preservar precisão de centavos — `DECIMAL(10,2)` no banco, validado no servidor como `numeric`, `min:0`, `max:99999999.99` e no formato `\d{1,8}(\.\d{1,2})?`. `duration_minutes` é inteiro, `min:1`, `max:1440`. Ativação/desativação é só mais um campo do `PATCH` (`is_active`); não existe exclusão definitiva.
+
+Erros: `422 VALIDATION_ERROR` (campos inválidos, com `fields`), `404 NOT_FOUND` (id inexistente no `PATCH`) — mesmo contrato de erro já estabelecido (`{"error": {"code", "message", "fields"?}}`).
+
+### Profissionais — `/api/v1/admin/professionals`
+
+| Método | Rota | Corpo | Resposta |
+| --- | --- | --- | --- |
+| `GET` | `/professionals` | — | `200` `{"data": [...]}`, ativos e inativos, ordenados por `id`, com `services` embutido |
+| `POST` | `/professionals` | `name`, `description?`, `is_active?`, `service_ids?` | `201` `{"data": {...}}` |
+| `PATCH` | `/professionals/{id}` | qualquer subconjunto; `service_ids` tem semântica própria (ver abaixo) | `200` `{"data": {...}}` |
+
+Exemplo de objeto de profissional:
+
+```json
+{
+  "id": 1,
+  "name": "Lucas",
+  "description": null,
+  "is_active": true,
+  "services": [
+    { "id": 1, "name": "Corte masculino", "is_active": true },
+    { "id": 3, "name": "Sobrancelha", "is_active": false }
+  ]
+}
+```
+
+- `service_ids` (array de IDs de serviço) define o vínculo N:N via `professional_service`. Profissional sem serviços é permitido (`service_ids: []` ou omitido na criação) — ele simplesmente não estará apto a oferecer atendimentos.
+- No `PATCH`, **omitir `service_ids` preserva os vínculos atuais**; enviá-lo como `[]` remove todos. Essa é a única diferença de semântica entre "campo não enviado" e os demais campos (que também seguem PATCH parcial padrão).
+- IDs duplicados no array são recusados (`422`, formato). IDs que não existem em `services` também são recusados (`422`, verificado como leitura de negócio dentro da transação travada por `business_settings`, não antes).
+- Um vínculo com um serviço que depois foi desativado **não é removido automaticamente** — o objeto do serviço embutido mostra `is_active: false` para esse caso, e o admin decide se quer desvincular manualmente. A futura funcionalidade de disponibilidade exigirá serviço **e** profissional ativos para aceitar novos agendamentos; isso não está implementado nesta entrega.
+
+### Trava de concorrência (lock de `business_settings`)
+
+Toda criação/edição de serviço, profissional ou vínculo abre uma transação cujo primeiro passo é `SELECT ... FOR UPDATE` na única linha de `business_settings`, antes de qualquer leitura de negócio (ex.: conferir se os `service_ids` existem). Implementação pequena e explícita — chamada direta a `BusinessSettings::query()->lockForUpdate()->first()` dentro de cada `DB::transaction()`, sem abstração nem lock por profissional nesta entrega, seguindo a estratégia da seção 5. Uma alteração de vínculos inválida (IDs inexistentes/duplicados) não aplica nenhuma mudança — nem nome, nem os demais campos — porque a validação de existência roda antes de qualquer `save()`/`sync()` dentro da mesma transação.

@@ -14,6 +14,16 @@ export default defineConfig({
     host: true,
     port: 5173,
     strictPort: true,
+    // Docker Desktop on Windows does not reliably forward native filesystem
+    // change events across the Windows -> WSL2/Linux boundary for bind
+    // mounts, so chokidar's default watcher can miss edits entirely and
+    // Vite keeps serving an old module graph. Polling guarantees changes
+    // are detected regardless of how the host delivers (or fails to
+    // deliver) fs events.
+    watch: {
+      usePolling: true,
+      interval: 300,
+    },
     hmr: isProxied ? { host: 'localhost', clientPort: proxyPort } : undefined,
   },
   test: {
