@@ -5,6 +5,8 @@ const LINKS = [
   { to: '/admin/agenda', label: 'Agenda' },
   { to: '/admin/servicos', label: 'Serviços' },
   { to: '/admin/profissionais', label: 'Profissionais' },
+  { to: '/admin/expediente', label: 'Expediente' },
+  { to: '/admin/bloqueios', label: 'Bloqueios' },
 ]
 
 export function AdminNav() {

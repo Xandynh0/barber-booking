@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\Admin\AuthController;
+use App\Http\Controllers\Admin\BusinessSettingsController;
 use App\Http\Controllers\Admin\ProfessionalController;
+use App\Http\Controllers\Admin\ScheduleBlockController;
 use App\Http\Controllers\Admin\ServiceController;
+use App\Http\Controllers\Admin\WorkingHourController;
 use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Route;
 
@@ -24,5 +27,17 @@ Route::prefix('v1/admin')->name('admin.')->group(function () {
         Route::get('/professionals', [ProfessionalController::class, 'index'])->name('professionals.index');
         Route::post('/professionals', [ProfessionalController::class, 'store'])->name('professionals.store');
         Route::patch('/professionals/{professional}', [ProfessionalController::class, 'update'])->name('professionals.update');
+
+        Route::get('/professionals/{professional}/working-hours', [WorkingHourController::class, 'show'])
+            ->name('professionals.working-hours.show');
+        Route::put('/professionals/{professional}/working-hours', [WorkingHourController::class, 'update'])
+            ->name('professionals.working-hours.update');
+
+        Route::get('/schedule-blocks', [ScheduleBlockController::class, 'index'])->name('schedule-blocks.index');
+        Route::post('/schedule-blocks', [ScheduleBlockController::class, 'store'])->name('schedule-blocks.store');
+        Route::delete('/schedule-blocks/{scheduleBlock}', [ScheduleBlockController::class, 'destroy'])
+            ->name('schedule-blocks.destroy');
+
+        Route::get('/business-settings', [BusinessSettingsController::class, 'show'])->name('business-settings.show');
     });
 });

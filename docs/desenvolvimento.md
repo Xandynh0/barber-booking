@@ -13,7 +13,7 @@ Fundação técnica do Barber Booking: monorepo com frontend (React + Vite), bac
 | MySQL | 8.4 (LTS) | suporte estendido até 2032 |
 | Mailpit | v1.31.0 (fixado) | captura e-mails locais (SMTP + interface web) |
 | Laravel Sanctum | 4.3.x | autenticação de sessão/cookie do SPA, sem tokens |
-| react-router-dom | 7.x | rotas `/`, `/admin/login`, `/admin/agenda` |
+| react-router-dom | 7.x | rotas `/`, `/admin/login`, `/admin/agenda`, `/admin/servicos`, `/admin/profissionais`, `/admin/expediente`, `/admin/bloqueios` |
 
 PHP, Docker e CI usam a mesma versão (8.4), conferida contra o `composer.lock` real — ver "Limitações" para o detalhe de como isso foi descoberto.
 
@@ -198,6 +198,60 @@ curl -s -b cookies.txt -c cookies.txt -H "X-XSRF-TOKEN: $XSRF" -H "Content-Type:
   -d '{"name":"Lucas","service_ids":[1]}'
 ```
 
+## Expediente semanal e bloqueios
+
+Contrato completo em `docs/planejamento-barbearia-mvp.md`, seção 14. Aqui fica o que é específico da implementação.
+
+### Expediente (`working_hours`)
+
+- `PUT /api/v1/admin/professionals/{id}/working-hours` é uma **substituição completa** da semana: o corpo sempre traz os 7 dias (`days`, um objeto por `weekday`, cada um com `periods`). Não existe PATCH parcial por dia — enviar só um dia não é suportado, e omitir um dia é rejeitado (`422`, `size:7` na validação). Essa escolha é o que torna a estratégia de salvamento simples e atômica: dentro de uma única transação (travando `business_settings` primeiro), o controller apaga todos os `working_hours` daquele profissional e recria a partir do payload — como a validação completa (formato, sobreposição, início < fim) já rodou antes de abrir a transação, uma entrada inválida nunca chega a essa parte, então o expediente anterior nunca fica parcialmente apagado.
+- Validação de sobreposição/ordem roda em `UpdateWorkingHoursRequest::withValidator()` — é validação de formato sobre o próprio payload (não uma leitura de banco), então roda antes da transação, diferente da checagem de `service_ids` em profissionais. Períodos são comparados por string `"HH:MM"` (comparação lexicográfica funciona para horários de 2 dígitos); adjacentes (`fim` de um == `início` do seguinte) são aceitos.
+- Sem componente de data no formato (`start_time`/`end_time` são só `"HH:MM"`), um período atravessando a meia-noite não é representável — a validação de `início < fim` já recusa isso automaticamente, sem checagem extra.
+- `GET` sempre retorna os 7 dias, mesmo para um profissional sem nenhum expediente salvo (todos com `periods: []` — folga), para o frontend não ter que tratar "dia ausente" como um caso especial.
+- Armazenamento: coluna `TIME` do MySQL (`start_time`, `end_time`); a API trafega e recebe `"HH:MM"` (sem segundos) — o controller corta os dois últimos caracteres do valor bruto do banco (`"09:00:00"` → `"09:00"`) ao montar a resposta.
+
+### Bloqueios (`schedule_blocks`)
+
+- **Decisão de modelagem — sem coluna de agrupamento para "fechamento geral":** a seção 4 do planejamento já define `schedule_blocks.professional_id` como obrigatório (não nulo) e descreve o fechamento geral como "criar bloqueios para todos os profissionais numa operação atômica" — ou seja, N linhas, uma por profissional, não uma linha especial com profissional nulo. Implementado literalmente assim: `scope: "shop"` no `POST` faz o controller buscar todos os profissionais (dentro da transação, depois do lock) e criar um `schedule_blocks` para cada um. Não existe um `batch_id`/`group_id` ligando essas linhas — cada uma é removida individualmente (`DELETE /schedule-blocks/{id}`), e a listagem mostra cada uma com seu profissional embutido, o que já deixa o alcance de cada linha explícito. Avaliado e descartado adicionar uma coluna de agrupamento só para UX de remoção em lote: o schema documentado não pede isso, e a tela já comunica o alcance por linha.
+- `starts_at`/`ends_at` seguem a convenção de instantes da seção 11 (ISO 8601 com offset na entrada, UTC na resposta) — igual ao resto da API, mas é o **primeiro lugar** onde isso é exercitado de ponta a ponta nesta aplicação. Achado na implementação: o cast `datetime` do Eloquent **não converte para o timezone da aplicação ao gravar** — ele só formata o valor usando o timezone que a instância `Carbon` já carrega no momento da atribuição. Passar a string ISO com offset (`"-03:00"`) direto pro `create()` gravava o literal `"18:00:00"` no banco (hora local, sem reinterpretar para UTC) em vez de `"21:00:00"`. Corrigido convertendo explicitamente no controller: `CarbonImmutable::parse($validated['starts_at'])->utc()` antes do `create()`.
+- Bloqueios podem atravessar dias (sem limite de duração) — validado só como `ends_at` após `starts_at` (`after:starts_at` do Laravel, que compara instantes reais, não strings).
+- Sobreposição entre bloqueios é **permitida de propósito** — a especificação não define uma regra de conflito entre bloqueios (só entre bloqueio e reserva, que não existe ainda), então nenhuma validação de overlap foi adicionada aqui.
+- `professional_id` (quando `scope: "professional"`) é validado quanto ao formato no Form Request (`required_if`/`prohibited_if`/`integer`), mas a **existência** é checada dentro da transação travada, depois do lock — mesmo padrão de `assertServicesExist` em profissionais, pelo mesmo motivo (é uma leitura de negócio, não um formato).
+
+### Leitura de `business_settings`
+
+`GET /api/v1/admin/business-settings` foi adicionado nesta entrega — antes, `business_settings` só era lido internamente (para o lock). O frontend de bloqueios precisa do `timezone` da barbearia para converter data/hora digitada pelo admin em UTC sem depender do fuso do navegador (`frontend/src/utils/timezone.js`). Ainda **só leitura** — nenhuma tela ou endpoint de edição.
+
+### Conversão de fuso horário no frontend (sem depender do navegador)
+
+`frontend/src/utils/timezone.js` implementa duas conversões usando só `Intl.DateTimeFormat` (sem biblioteca de datas nova):
+
+- `zonedWallTimeToUtcIso(data, hora, timezone)`: o admin digita uma data/hora que representa horário local **da barbearia** (não do navegador); a função calcula o offset de `timezone` naquele instante (via `Intl.DateTimeFormat` com `timeZone` explícito) e devolve o ISO 8601 em UTC que a API espera.
+- `utcIsoToZonedParts(iso, timezone)`: o inverso, para exibir um `starts_at`/`ends_at` já em UTC como data/hora local da barbearia, de novo via `timeZone` explícito — nunca `new Date().toLocaleString()` sem fuso, que usaria o fuso do navegador da pessoa validando.
+
+Isso é o que permite testar esta funcionalidade de qualquer fuso horário (navegador do desenvolvedor, CI, etc.) e ainda assim ver os horários certos em `America/Sao_Paulo`.
+
+## Importação de dados de teste fictícios
+
+Comando manual (`backend/app/Console/Commands/ImportTestData.php`) para popular o banco de desenvolvimento com um pacote fixo de 15 serviços e 12 profissionais fictícios (`dados-teste-barber-booking`, mantido fora do repositório). **Nunca roda no boot, seed padrão ou CI** — é estritamente `php artisan import:test-data`, à mão.
+
+```sh
+docker compose exec backend php artisan import:test-data --dry-run   # valida e mostra a contagem prevista, sem escrever
+docker compose exec backend php artisan import:test-data             # importa de fato
+docker compose exec backend php artisan import:test-data --remove    # remove só os registros criados por esta importação
+```
+
+Por padrão lê `storage/app/test-data/{servicos,profissionais}.csv` (caminho configurável via `--path`) — esses CSVs e o manifesto de idempotência (`storage/app/test-data-import-manifest.json`) ficam fora do Git (`.gitignore`), por serem fixtures locais de quem está validando, não parte do código.
+
+- **Validação completa antes de qualquer escrita:** `test_code` único, `name` presente, `duration_minutes` inteiro 1–1440, `price` no mesmo formato decimal-string aceito pela API (`\d{1,8}(\.\d{1,2})?`), `is_active` em `{0,1}`, e todo `service_codes` de `profissionais.csv` referenciando um `test_code` existente em `servicos.csv`. Qualquer erro aborta a importação inteira (nada é escrito) e lista todos os problemas encontrados, não só o primeiro.
+- **Ordem e lock:** serviços são criados antes de profissionais (para resolver `service_codes` → IDs reais), e a escrita roda dentro de `DB::transaction()` travando `business_settings` como primeira operação — mesma estratégia já usada em `ServiceController`/`ProfessionalController`, sem lock adicional por profissional.
+- **Idempotência sem `test_code` no banco:** como o schema do domínio não tem (nem deveria ter) uma coluna `test_code`, o comando mantém um manifesto JSON local mapeando `test_code → id` criado, junto com uma identificação do banco de destino (conexão, nome, host, porta). Rodar o comando de novo pula qualquer `test_code` já presente no manifesto (depois de confirmar que o registro com aquele id ainda existe e tem o mesmo nome) — não cria duplicata.
+- **Colisão por nome com registro preexistente:** se um `name` do CSV já existir no banco **e não estiver no manifesto** (ou seja, não foi este importador que o criou), o comando para imediatamente com uma mensagem explicando a colisão — nunca presume posse de um cadastro existente só porque o nome bate. Resolvido manualmente uma vez nesta entrega: o banco de desenvolvimento já tinha um serviço "Corte degradê" de testes manuais anteriores; o CSV local (não o pacote original) foi ajustado para `"Corte degradê — teste"` em `SRV02`, preservando o `test_code` e todas as referências de `service_codes` dos profissionais.
+- **Banco de destino errado:** se o manifesto existente aponta para uma conexão/banco diferente do atual, o comando recusa reutilizá-lo (tanto para importar quanto para `--remove`) em vez de arriscar IDs de outro banco.
+- **`--remove`:** apaga apenas os registros cujos IDs estão no manifesto (depois de confirmar a mesma identidade de banco), avisa quantos períodos de expediente/bloqueios de cada profissional serão removidos em cascata pela FK (nenhum nesta entrega, já que a importação não cria expediente/bloqueios), e então apaga o arquivo de manifesto.
+
+Execução registrada nesta entrega (banco `barber_booking`, desenvolvimento): 15 serviços criados (ids 9–23) e 12 profissionais criados (ids 5–16); nenhum administrador, cadastro preexistente ou dado de outra entrega foi alterado. Re-executar o comando sem `--remove` confirma idempotência (`Serviços criados: 0`, `Profissionais criados: 0`, todos os 27 `test_code` listados como já importados).
+
 ## Testes
 
 Frontend (Vitest):
@@ -209,7 +263,11 @@ npm run test
 npm run build   # verificação de build de produção
 ```
 
-43 testes no total (Vitest + Testing Library): `Home` (3), cliente HTTP/CSRF (`api/client.test.js`, 6), conversão de moeda (`utils/money.test.js`, 6), `Login` (7), `ProtectedRoute` (4), `Agenda` (3), `Services` (6 — carregando/lista, vazio, erro com retry, criar convertendo `45,90` → `"45.90"`, validação preservando os campos, editar pré-preenchendo e enviando `PATCH`) e `Professionals` (8 — lista com serviços vinculados, vínculo com serviço desde então inativo mostrando "(inativo)", vazio, criar com serviços selecionados, criar sem nenhum serviço, validação preservando valores, editar pré-marcando os checkboxes certos, desativar). Resultado desta entrega: **43 passed**, build de produção OK.
+64 testes no total (Vitest + Testing Library): `Home` (3), cliente HTTP/CSRF (`api/client.test.js`, 6), conversão de moeda (`utils/money.test.js`, 6), conversão de fuso horário (`utils/timezone.test.js`, 4 — ver seção "Expediente semanal e bloqueios"), `Login` (7), `ProtectedRoute` (4), `Agenda` (3), `App.test.jsx` (5 — integração contra o `App`/router real, ver abaixo), `Services` (6 — carregando/lista, vazio, erro com retry, criar convertendo `45,90` → `"45.90"`, validação preservando os campos, editar pré-preenchendo e enviando `PATCH`), `Professionals` (8 — lista com serviços vinculados, vínculo com serviço desde então inativo mostrando "(inativo)", vazio, criar com serviços selecionados, criar sem nenhum serviço, validação preservando valores, editar pré-marcando os checkboxes certos, desativar), `WorkingHours` (5 — dia de folga, períodos de almoço já salvos exibidos corretamente, adicionar/remover período e salvar, erro de validação agrupado pelo dia afetado, erro de carregamento com retry) e `ScheduleBlocks` (7 — vazio, listagem convertendo para o fuso da barbearia e deixando o alcance explícito por linha, criação com conversão local→UTC, criação de fechamento geral sem campo de profissional, validação preservando valores, confirmação antes de remover, remoção cancelada ao recusar a confirmação). Resultado desta entrega: **64 passed**, build de produção OK.
+
+`frontend/src/App.test.jsx` cobre agora também `/admin/expediente` e `/admin/bloqueios` pelo router real (`BrowserRouter` + `AdminArea`), não só as páginas isoladas com `MemoryRouter` próprio — confirma que a navegação e o conteúdo de cada página aparecem quando acessadas diretamente pela URL, o que teria pego a regressão de Vite citada em "Solução de problemas comuns".
+
+**Achado durante os testes desta entrega (bug de aplicação, não de teste):** `WorkingHours.jsx` inicializava `loading` como `false`, então o formulário chegava a renderizar por um instante com a semana vazia padrão antes do primeiro carregamento terminar — inofensivo visualmente (o carregamento é rápido), mas fazia um teste que verificava conteúdo já carregado falhar de forma intermitente, dependendo de timing. Corrigido inicializando `loading` como `true` (só mostra o formulário depois do primeiro `GET` responder).
 
 Backend (PHPUnit, dentro do container, usando o MySQL real do Compose):
 
@@ -273,9 +331,21 @@ Achado ao longo do caminho: o `ModelNotFoundException` de um route-model-binding
 
 `backend/tests/Feature/BusinessSettingsSeederTest.php` (2) prova os defaults documentados e a idempotência (rodar o seeder duas vezes, alterar valores no meio, confirmar que a segunda chamada não sobrescreve). Achado aqui: `firstOrCreate(['id' => 1], [...])` é frágil — o `auto_increment` do MySQL **não é desfeito por rollback de transação**, então um teste anterior que criou e descartou uma linha já consome o id 1, e a segunda chamada do seeder (buscando especificamente `id=1`) não encontra nada e cria uma segunda linha. Corrigido usando `firstOrCreate([], [...])` (critério de busca vazio = "existe alguma linha?", o certo para um singleton), independente de qual id ela acabou recebendo.
 
-Resultado desta entrega: suíte completa com **41 passed** (11 de autenticação + 14 de serviços + 10 de profissionais + 2 de `business_settings` + 4 pré-existentes da fundação técnica), rodando 3× seguidas sem flakiness em Docker. Confirmado por contagem de linhas que **a suíte automatizada em si** não alterou o banco `barber_booking` (dev) em nenhuma das execuções — a suíte usa exclusivamente `DB_TEST_DATABASE` (ver "Isolamento entre banco de desenvolvimento e banco de testes" acima).
+Resultado da entrega de serviços/profissionais: suíte completa com **41 passed** (11 de autenticação + 14 de serviços + 10 de profissionais + 2 de `business_settings` + 4 pré-existentes da fundação técnica), rodando 3× seguidas sem flakiness em Docker. Confirmado por contagem de linhas que **a suíte automatizada em si** não alterou o banco `barber_booking` (dev) em nenhuma das execuções — a suíte usa exclusivamente `DB_TEST_DATABASE` (ver "Isolamento entre banco de desenvolvimento e banco de testes" acima).
 
 Essa afirmação é sobre a suíte de testes, não sobre o banco de desenvolvimento como um todo: ele **foi** alterado depois, por comandos manuais de limpeza (`\App\Models\User::query()->delete()` via `tinker`) rodados entre sessões de validação — ver a nota sobre o banco compartilhado na seção "Migrations" acima. Isso é a causa comprovada de um administrador criado anteriormente ter parado de funcionar; não há evidência de exclusão pela aplicação, migrations, seeds ou troca de banco/configuração.
+
+### Testes de expediente e bloqueios
+
+`backend/tests/Feature/Admin/WorkingHourTest.php` (10): acesso sem sessão em `GET`/`PUT` (`401`), `GET` retornando os 7 dias com `periods: []` para um profissional sem expediente salvo, salvar almoço (dois períodos no mesmo dia) + dia de folga + períodos adjacentes num único `PUT`, rejeição de sobreposição, rejeição de início não antes do fim, rejeição de payload faltando um `weekday`, `404` para profissional inexistente, **atomicidade** (um `PUT` inválido não altera o expediente salvo anteriormente — `assertDatabaseHas` confirma os períodos antigos intactos) e substituição completa (salvar um novo dia não deixa restos do expediente anterior salvo para outro dia).
+
+`backend/tests/Feature/Admin/ScheduleBlockTest.php` (13): acesso sem sessão nos três métodos, criação para um profissional específico, bloqueio atravessando dias (conferido o UTC resultante, não só o round-trip), fechamento geral criando um bloqueio por profissional atomicamente, rejeição de `professional_id` junto de `scope: "shop"`, rejeição de profissional inexistente, rejeição de fim antes do início, **sobreposição entre bloqueios do mesmo profissional aceita sem erro** (ambos criados), listagem com profissional embutido, remoção de um bloqueio e `404` para id inexistente.
+
+`backend/tests/Feature/Admin/BusinessSettingsTest.php` (2): acesso sem sessão (`401`) e leitura do singleton seedado.
+
+Resultado desta entrega: **66 passed** no total (41 anteriores + 10 de expediente + 13 de bloqueios + 2 de `business_settings`), `vendor/bin/pint --format agent` sem alterações, rodado 3× seguidas sem flakiness em Docker.
+
+Achado na implementação (não um bug de teste, um bug de aplicação pego pelo teste): o cast `datetime` do Eloquent não converte timezone ao gravar — ver "Bloqueios (`schedule_blocks`)" acima para a correção (`CarbonImmutable::parse(...)->utc()` explícito no controller).
 
 ## Mailpit
 
@@ -309,8 +379,18 @@ Nenhuma ferramenta de automação de navegador está disponível neste ambiente 
    - Desative, em `/admin/servicos`, um serviço que está vinculado a esse profissional; volte para `/admin/profissionais` e confirme que o vínculo continua lá, com "(inativo)" ao lado do nome do serviço.
    - Edite o profissional sem mexer nos checkboxes de serviço; confirme que os vínculos continuam os mesmos depois de salvar (omitir `service_ids` preserva).
    - Teste a navegação só por teclado entre os checkboxes de serviço (Tab/Espaço) e confirme foco visível.
+7. Abra `/admin/expediente`:
+   - Escolha um profissional no seletor; confirme que os 7 dias aparecem, com "Folga — nenhum período definido." para os dias sem expediente salvo.
+   - Adicione dois períodos no mesmo dia (ex.: 09:00–12:00 e 13:00–18:00, simulando o almoço) e salve; recarregue a página e confirme que os dois períodos persistem.
+   - Tente salvar dois períodos que se sobrepõem; confirme a mensagem de erro junto do dia afetado, e que o expediente salvo anteriormente não foi apagado (recarregue para conferir).
+   - Troque de profissional no seletor; confirme que o expediente mostrado é o daquele profissional, não o anterior.
+8. Abra `/admin/bloqueios`:
+   - Crie um bloqueio para um profissional específico, com início e fim em dias diferentes (ex.: 24/12 18:00 até 26/12 08:00); confirme que a lista mostra o profissional, as datas/horas convertidas (no fuso da barbearia, não o do navegador) e o motivo.
+   - Crie um bloqueio com "Toda a barbearia"; confirme que aparece uma linha por profissional cadastrado, todas com o mesmo intervalo.
+   - Clique "Remover" num bloqueio; confirme que aparece uma confirmação antes da remoção, e que cancelar a confirmação não remove nada.
+   - Teste a navegação só por teclado entre os campos de data/hora e o seletor de alcance (Tab) e confirme foco visível.
 
-O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), e os fluxos completos de login/sessão/logout/CSRF e de criação/edição de serviços e profissionais contra o proxy real.
+O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), os fluxos completos de login/sessão/logout/CSRF e de criação/edição de serviços e profissionais contra o proxy real, e nesta entrega também expediente (`GET`/`PUT` com almoço, sobreposição rejeitada) e bloqueios (criação atravessando dias com conversão de fuso conferida, fechamento geral, remoção) contra o proxy real, com sessão e CSRF reais — usando um profissional e um administrador temporários criados só para essa verificação e removidos por ID logo depois (nenhum dado preexistente foi tocado). As telas de `/admin/expediente` e `/admin/bloqueios` em si (passos 7 e 8 acima) ainda não foram confirmadas visualmente em um navegador real.
 
 ## Solução de problemas comuns
 
@@ -323,13 +403,14 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 | `Failed to resolve import "<pacote>"` no navegador, após instalar uma dependência nova do frontend | volume `frontend_node_modules` com conteúdo antigo, sombreando o `node_modules` da imagem recém-buildada | veja "Atualizando dependências" — rode `docker compose exec frontend npm install` e depois `docker compose restart frontend` |
 | Porta 8080/3307/8025 já em uso | outro serviço local ocupando a porta | ajuste `APP_PORT`, `MYSQL_HOST_PORT` ou `MAILPIT_WEB_PORT` no `.env` da raiz |
 | `composer install` falha por versão do PHP | imagem Docker desatualizada em cache | `docker compose build --no-cache backend` |
-| Página renderiza em branco (ou só com conteúdo antigo) mesmo em aba anônima/nova, para arquivos editados depois que o container `frontend` já estava rodando | o watcher de arquivos do Vite (chokidar) depende de eventos nativos do sistema de arquivos; no Docker Desktop para Windows, esses eventos não atravessam de forma confiável a fronteira Windows → WSL2/Linux para bind mounts, então o Vite nunca percebe a mudança e continua servindo o grafo de módulos antigo da memória — sem erro nenhum, porque não é uma exceção JS, é uma rota/componente que simplesmente não existe na versão que ele está servindo. Prova: comparar `curl http://localhost:8080/src/<arquivo>.jsx` (o que o Vite está de fato servindo) com o arquivo no host/container (`docker compose exec frontend cat /app/src/<arquivo>.jsx`) — divergem mesmo com checksum idêntico em disco | corrigido nesta entrega: `frontend/vite.config.js` agora define `server.watch.usePolling = true`, o que faz o Vite checar os arquivos periodicamente em vez de depender de eventos de SO. Depois de atualizar o `vite.config.js`, rode `docker compose restart frontend` uma vez para a mudança valer; edições seguintes passam a refletir sem precisar de restart |
+| Página renderiza em branco (ou só com conteúdo antigo) mesmo em aba anônima/nova, para arquivos editados depois que o container `frontend` já estava rodando | o watcher de arquivos do Vite (chokidar) depende de eventos nativos do sistema de arquivos; no Docker Desktop para Windows, esses eventos não atravessam de forma confiável a fronteira Windows → WSL2/Linux para bind mounts, então o Vite nunca percebe a mudança e continua servindo o grafo de módulos antigo da memória — sem erro nenhum, porque não é uma exceção JS, é uma rota/componente que simplesmente não existe na versão que ele está servindo. Prova: comparar `curl http://localhost:8080/src/<arquivo>.jsx` (o que o Vite está de fato servindo) com o arquivo no host/container (`docker compose exec frontend cat /app/src/<arquivo>.jsx`) — divergem mesmo com checksum idêntico em disco | corrigido na entrega de serviços/profissionais: `frontend/vite.config.js` agora define `server.watch.usePolling = true`, o que faz o Vite checar os arquivos periodicamente em vez de depender de eventos de SO. Depois de atualizar o `vite.config.js`, rode `docker compose restart frontend` uma vez para a mudança valer; edições seguintes passam a refletir sem precisar de restart |
+| Mesmo sintoma acima (página renderiza conteúdo antigo), mas **só para alguns arquivos**, mesmo com o polling do item anterior já configurado e o container rodando há muito tempo | o próprio Vite reinicia sozinho quando detecta mudança no `vite.config.js` (`"vite.config.js changed, restarting server..."` no log) — e um `git checkout`/troca de branch já altera o mtime desse arquivo mesmo sem mudar o conteúdo, disparando esse auto-restart. Esse self-restart in-process, pelo menos nesta versão do Vite, às vezes recria o watcher de forma incompleta: alguns arquivos (ex.: um componente-folha como `AdminNav.jsx`) continuam sendo re-observados normalmente, enquanto outros (ex.: `App.jsx`, o arquivo de entrada das rotas) ficam presos no grafo de módulos de antes do restart — edições posteriores a eles não dão nenhum log (`hmr update`) e continuam sendo servidas como estavam no momento do restart. Prova: comparar o conteúdo servido (`curl`) de dois arquivos editados na mesma janela de tempo — um atualizado, outro não — e checar `docker compose logs frontend` por uma linha `vite.config.js changed, restarting server...` seguida de silêncio para o arquivo afetado | `docker compose restart frontend` (restart completo do container, não o self-restart do Vite) resolve — recria o processo do zero com um watcher novo. Depois de qualquer `git checkout`/troca de branch que leve a sessão de volta ao desenvolvimento no frontend, é mais seguro reiniciar o container preventivamente do que confiar no auto-restart do Vite |
 
 ## Limitações desta etapa
 
-- Serviços, profissionais e seus vínculos estão implementados (esta entrega), assim como autenticação administrativa (entrega anterior). Expediente, bloqueios, disponibilidade, catálogo público, agendamentos, cancelamento e notificações ainda não existem.
-- `business_settings` só tem o registro singleton (seedado) e o lock usado pelas escritas de cadastro — sem tela nem endpoint de edição ainda.
+- Serviços, profissionais, seus vínculos, expediente semanal e bloqueios estão implementados, assim como autenticação administrativa. Disponibilidade (motor que cruza expediente + bloqueios + reservas), catálogo público, agendamentos, cancelamento e notificações ainda não existem — expediente e bloqueios só armazenam dados nesta entrega, sem nenhum cálculo de horários livres.
+- `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
-- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade — o lock de `business_settings` usado nos cadastros desta entrega não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
-- Homepage confirmada visualmente em navegador real; viewport mobile, estado de indisponibilidade e os fluxos completos de `/admin/login`, `/admin/agenda`, `/admin/servicos` e `/admin/profissionais` ainda pendentes de validação visual — ver roteiro manual acima.
+- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade — o lock de `business_settings` usado nos cadastros, expediente e bloqueios desta e da entrega anterior não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
+- Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas novas desta entrega) ainda **não** foram confirmados visualmente em navegador — as novas rotas de API foram verificadas via `curl` contra o proxy real (sessão + CSRF reais), e a renderização/roteamento das páginas via teste de integração automatizado (`App.test.jsx`), mas nenhuma ferramenta de automação de navegador está disponível neste ambiente para provar a tela em si. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual acima.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.

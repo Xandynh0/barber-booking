@@ -12,9 +12,15 @@ import App from './App'
 vi.mock('./api/auth')
 vi.mock('./api/services')
 vi.mock('./api/professionals')
+vi.mock('./api/workingHours')
+vi.mock('./api/scheduleBlocks')
+vi.mock('./api/businessSettings')
 import { me } from './api/auth'
 import { listServices } from './api/services'
 import { listProfessionals } from './api/professionals'
+import { getWorkingHours } from './api/workingHours'
+import { listScheduleBlocks } from './api/scheduleBlocks'
+import { getBusinessSettings } from './api/businessSettings'
 
 function renderAppAt(path) {
   window.history.pushState({}, '', path)
@@ -26,6 +32,11 @@ describe('App routing (admin area)', () => {
     me.mockResolvedValue({ data: { id: 1, name: 'Admin', email: 'admin@barberbooking.test' } })
     listServices.mockResolvedValue({ data: [] })
     listProfessionals.mockResolvedValue({ data: [] })
+    getWorkingHours.mockResolvedValue({
+      data: { professional_id: 1, days: Array.from({ length: 7 }, (_, weekday) => ({ weekday, periods: [] })) },
+    })
+    listScheduleBlocks.mockResolvedValue({ data: [] })
+    getBusinessSettings.mockResolvedValue({ data: { timezone: 'America/Sao_Paulo' } })
   })
 
   afterEach(() => {
@@ -57,5 +68,21 @@ describe('App routing (admin area)', () => {
     expect(screen.getByRole('link', { name: 'Agenda' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Novo profissional' })).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText('Nenhum profissional cadastrado ainda.')).toBeInTheDocument())
+  })
+
+  it('renders the admin navigation and the working hours heading at /admin/expediente', async () => {
+    renderAppAt('/admin/expediente')
+
+    expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Bloqueios' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Expediente semanal' })).toBeInTheDocument()
+  })
+
+  it('renders the admin navigation and the schedule blocks heading at /admin/bloqueios', async () => {
+    renderAppAt('/admin/bloqueios')
+
+    expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Expediente' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bloqueios cadastrados' })).toBeInTheDocument()
   })
 })

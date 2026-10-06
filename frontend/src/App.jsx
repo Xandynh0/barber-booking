@@ -4,7 +4,9 @@ import { AuthProvider } from './context/AuthContext'
 import Agenda from './pages/admin/Agenda'
 import Login from './pages/admin/Login'
 import Professionals from './pages/admin/Professionals'
+import ScheduleBlocks from './pages/admin/ScheduleBlocks'
 import Services from './pages/admin/Services'
+import WorkingHours from './pages/admin/WorkingHours'
 import Home from './pages/Home'
 
 function AdminArea() {
@@ -33,6 +35,22 @@ function AdminArea() {
           element={
             <ProtectedRoute>
               <Professionals />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="expediente"
+          element={
+            <ProtectedRoute>
+              <WorkingHours />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="bloqueios"
+          element={
+            <ProtectedRoute>
+              <ScheduleBlocks />
             </ProtectedRoute>
           }
         />
