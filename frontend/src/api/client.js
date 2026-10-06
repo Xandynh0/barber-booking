@@ -1,0 +1,64 @@
+export class ApiError extends Error {
+  constructor(status, code, message, fields) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+    this.fields = fields ?? null
+  }
+}
+
+function readCookie(name) {
+  const pattern = new RegExp(`(?:^|; )${name.replace(/([.$?*|{}()[\]\\/+^])/g, '\\$1')}=([^;]*)`)
+  const match = document.cookie.match(pattern)
+
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+/**
+ * Must be called before any state-changing admin request — Sanctum's SPA
+ * auth validates the CSRF cookie this sets against an X-XSRF-TOKEN header.
+ */
+export async function ensureCsrfCookie() {
+  await fetch('/sanctum/csrf-cookie', {
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' },
+  })
+}
+
+export async function apiFetch(path, options = {}) {
+  const method = (options.method ?? 'GET').toUpperCase()
+  const headers = { Accept: 'application/json', ...options.headers }
+
+  if (method !== 'GET' && method !== 'HEAD') {
+    const token = readCookie('XSRF-TOKEN')
+    if (token) {
+      headers['X-XSRF-TOKEN'] = token
+    }
+    if (options.body) {
+      headers['Content-Type'] = 'application/json'
+    }
+  }
+
+  let response
+  try {
+    response = await fetch(path, { ...options, method, headers, credentials: 'same-origin' })
+  } catch {
+    throw new ApiError(0, 'NETWORK_ERROR', 'Não foi possível conectar ao servidor.')
+  }
+
+  if (response.status === 204) {
+    return null
+  }
+
+  const body = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const code = body?.error?.code ?? (response.status === 419 ? 'SESSION_EXPIRED' : 'UNKNOWN_ERROR')
+    const message = body?.error?.message ?? 'Erro inesperado. Tente novamente.'
+
+    throw new ApiError(response.status, code, message, body?.error?.fields)
+  }
+
+  return body
+}

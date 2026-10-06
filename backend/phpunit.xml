@@ -33,7 +33,14 @@
         <env name="DB_URL" value=""/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
-        <env name="SESSION_DRIVER" value="array"/>
+        <!-- Forced to "database" (not "array") so login/me/logout tests exercise the real
+             MySQL-backed session store, same as production, instead of a driver that would
+             never be used outside tests. -->
+        <env name="SESSION_DRIVER" value="database" force="true"/>
+        <!-- Low, forced limits so rate-limit tests can trip the 429 without waiting a real
+             minute or sending dozens of requests. -->
+        <env name="ADMIN_LOGIN_THROTTLE_PER_EMAIL" value="2" force="true"/>
+        <env name="ADMIN_LOGIN_THROTTLE_PER_IP" value="3" force="true"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>

@@ -1,0 +1,147 @@
+.admin-page {
+  min-height: 100vh;
+  padding: 2rem 1.5rem;
+  color: var(--color-black);
+}
+
+.admin-page--centered {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-card {
+  background: var(--color-cream-dark);
+  border: 1px solid var(--color-brass);
+  border-radius: 6px;
+  padding: 2rem;
+}
+
+.admin-login-card {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.admin-brand {
+  font-size: 1.75rem;
+  margin: 0;
+  color: var(--color-maroon);
+  text-align: center;
+}
+
+.admin-brand--inline {
+  text-align: left;
+  font-size: 1.4rem;
+}
+
+.admin-subtitle {
+  margin: 0 0 0.5rem;
+  text-align: center;
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.admin-shell-header .admin-subtitle {
+  text-align: left;
+  margin: 0.2rem 0 0;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.admin-field label {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.75;
+}
+
+.admin-field input {
+  font: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  background: var(--color-cream);
+  color: var(--color-black);
+}
+
+.admin-field input:focus-visible {
+  outline: 3px solid var(--color-maroon);
+  outline-offset: 1px;
+}
+
+.admin-field input[aria-invalid='true'] {
+  border-color: var(--color-maroon);
+}
+
+.admin-field-error {
+  color: var(--color-maroon);
+  font-size: 0.85rem;
+}
+
+.admin-form-error {
+  background: var(--color-cream);
+  border: 1px solid var(--color-maroon);
+  color: var(--color-maroon);
+  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.admin-button {
+  font: inherit;
+  font-weight: bold;
+  padding: 0.65rem 1rem;
+  border: 1px solid var(--color-maroon);
+  border-radius: 4px;
+  background: var(--color-maroon);
+  color: var(--color-cream);
+  cursor: pointer;
+}
+
+.admin-button:hover:not(:disabled) {
+  background: var(--color-maroon-dark);
+}
+
+.admin-button:focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.admin-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.admin-button--secondary {
+  background: transparent;
+  color: var(--color-maroon);
+}
+
+.admin-button--secondary:hover:not(:disabled) {
+  background: var(--color-cream);
+}
+
+.admin-shell-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: 720px;
+  margin: 0 auto 1.5rem;
+}
+
+.admin-placeholder {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+  opacity: 0.85;
+}
