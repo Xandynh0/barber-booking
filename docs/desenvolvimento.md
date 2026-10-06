@@ -108,6 +108,18 @@ docker compose exec -e DB_TEST_DATABASE=barber_booking_test backend php artisan 
 > docker compose exec mysql mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS barber_booking_test; GRANT ALL PRIVILEGES ON barber_booking_test.* TO 'barber_booking'@'%'; FLUSH PRIVILEGES;"
 > ```
 
+`php artisan migrate` nunca reseta dados — ele só aplica as migrations ainda não rodadas (controladas pela tabela `migrations`). As quatro migrations desta entrega (`business_settings`, `services`, `professionals`, `professional_service`) são aditivas; rodar o comando de novo em um banco já migrado não faz nada (`Nothing to migrate.`). **Nunca use `migrate:fresh` ou `migrate:refresh`** no banco de desenvolvimento — ambos apagam todas as tabelas antes de recriar.
+
+### Inicializando `business_settings`
+
+O registro único de configuração (seção 4 do planejamento) precisa existir antes de criar serviços/profissionais, porque toda escrita nesses cadastros trava essa linha (`SELECT ... FOR UPDATE`) antes de validar o resto. Ele é criado pelo seeder, não por uma migration (migrations criam estrutura; seeders populam dados) — e o seeder é idempotente, seguro para rodar quantas vezes quiser:
+
+```sh
+docker compose exec backend php artisan db:seed
+```
+
+`BusinessSettingsSeeder` usa `firstOrCreate([], [...])` — se já existir qualquer linha em `business_settings`, nada é alterado; só cria se a tabela estiver vazia. Rodar `db:seed` de novo depois que um admin editar essas configurações (quando essa tela existir) não vai sobrescrever nada.
+
 ## Autenticação administrativa
 
 SPA auth com [Laravel Sanctum](https://laravel.com/docs/13.x/sanctum#spa-authentication) em modo sessão/cookie — **sem tokens**, nada em `localStorage`. Funciona porque frontend e API estão na mesma origem (`localhost:8080`, via proxy); isso dispensa configuração de CORS.
@@ -160,6 +172,30 @@ Dois limites independentes, configuráveis por variável de ambiente (baixos nos
 
 Ambos contam tentativas **inválidas** (o middleware `throttle` incrementa a cada request, antes do controller decidir se a credencial é válida). `config/admin_auth.php` lê essas variáveis; nada fica hardcoded nos limiters.
 
+## Cadastros administrativos: serviços e profissionais
+
+Contrato completo (rotas, formato de `price`, semântica de `service_ids` no `PATCH`) está em `docs/planejamento-barbearia-mvp.md`, seção 13. Aqui fica o que é específico da implementação.
+
+- Todas as rotas (`/api/v1/admin/services`, `/api/v1/admin/professionals`) exigem sessão (`auth:sanctum`) e, nas mutações, o mesmo CSRF já descrito acima — nenhum mecanismo novo.
+- `price` trafega como **string decimal** (`"45.00"`, nunca `45.0` número) em request e response — o model `Service` usa o cast `decimal:2` do Eloquent, que já serializa como string tanto no PHP quanto no JSON. O frontend converte o formato brasileiro (`45,90`) para esse formato antes de enviar (`frontend/src/utils/money.js`) e de volta para exibir.
+- Ativação/desativação é só o campo `is_active` num `PATCH` normal — não existe rota de exclusão.
+- `service_ids` no `PATCH` de profissional: **omitir preserva os vínculos atuais; enviar `[]` remove todos.** Isso é tratado olhando se a chave existe no payload validado (`array_key_exists`), não o valor — por isso a validação usa `sometimes` (não `nullable`) no `UpdateProfessionalRequest`.
+- A existência dos `service_ids` é verificada **dentro** da transação que trava `business_settings`, depois do lock — não no Form Request (que só valida formato: é array, são inteiros, sem duplicados). Isso é deliberado: a checagem de negócio ("esse serviço existe?") precisa estar sob o mesmo lock que serializa as demais escritas de cadastro, não antes dela.
+- O lock em si é uma única linha por ação, sem abstração: `BusinessSettings::query()->lockForUpdate()->first();` como primeira instrução dentro de cada `DB::transaction()` em `ServiceController`/`ProfessionalController`. Nenhum lock por profissional nesta entrega (a especificação só pede isso para reservas, que não existem ainda).
+
+### Roteiro rápido para testar pelo terminal
+
+```sh
+# depois de logado (ver seção de autenticação acima para csrf-cookie + login)
+curl -s -b cookies.txt -c cookies.txt -H "X-XSRF-TOKEN: $XSRF" -H "Content-Type: application/json" \
+  -X POST http://localhost:8080/api/v1/admin/services \
+  -d '{"name":"Corte masculino","duration_minutes":30,"price":"45.00"}'
+
+curl -s -b cookies.txt -c cookies.txt -H "X-XSRF-TOKEN: $XSRF" -H "Content-Type: application/json" \
+  -X POST http://localhost:8080/api/v1/admin/professionals \
+  -d '{"name":"Lucas","service_ids":[1]}'
+```
+
 ## Testes
 
 Frontend (Vitest):
@@ -171,7 +207,7 @@ npm run test
 npm run build   # verificação de build de produção
 ```
 
-23 testes no total (Vitest + Testing Library), cobrindo: `Home` (3, pré-existente), cliente HTTP/CSRF (`api/client.test.js`, 6), `Login` (7 — carregamento inicial, login com sucesso e redirecionamento, credenciais inválidas, validação de campo, limite de tentativas, falha de conexão, redirecionamento automático se já autenticado), `ProtectedRoute` (4 — carregando, autenticado, sem sessão, sessão expirada/419) e `Agenda` (3 — identidade exibida sem dados fictícios, logout limpa a sessão e volta ao login, logout não trava em retry mesmo se a chamada falhar). Resultado desta entrega: **23 passed**, build de produção OK.
+43 testes no total (Vitest + Testing Library): `Home` (3), cliente HTTP/CSRF (`api/client.test.js`, 6), conversão de moeda (`utils/money.test.js`, 6), `Login` (7), `ProtectedRoute` (4), `Agenda` (3), `Services` (6 — carregando/lista, vazio, erro com retry, criar convertendo `45,90` → `"45.90"`, validação preservando os campos, editar pré-preenchendo e enviando `PATCH`) e `Professionals` (8 — lista com serviços vinculados, vínculo com serviço desde então inativo mostrando "(inativo)", vazio, criar com serviços selecionados, criar sem nenhum serviço, validação preservando valores, editar pré-marcando os checkboxes certos, desativar). Resultado desta entrega: **43 passed**, build de produção OK.
 
 Backend (PHPUnit, dentro do container, usando o MySQL real do Compose):
 
@@ -225,7 +261,17 @@ Corrigido em duas frentes, para que o comportamento seja o mesmo em qualquer amb
 
 Uma segunda pegadinha de teste que valeu registrar: `AuthManager`/`SessionGuard` cacheiam o guard resolvido e o usuário autenticado pela duração do container. Como várias chamadas HTTP simuladas num mesmo método de teste compartilham esse container, uma chamada feita **depois** do logout continuava "autenticada" nos testes — não porque a sessão real continuasse válida (o stack real via `curl`, com requisições HTTP de verdade, sempre rejeitou corretamente), mas porque o guard em memória nunca era invalidado entre as chamadas simuladas. A correção foi chamar `Auth::forgetGuards()` entre requisições simuladas sempre que o estado de autenticação muda (login/logout) dentro do mesmo teste.
 
-Resultado desta entrega: suíte completa com **15 passed** (11 de autenticação + 4 pré-existentes da fundação técnica), rodando 3× seguidas sem flakiness tanto em Docker quanto via PHP nativo contra o MySQL exposto em `localhost:3307`. Confirmado por contagem de linhas que o banco `barber_booking` (dev) não foi alterado por nenhuma execução.
+### Testes de serviços e profissionais
+
+`backend/tests/Feature/Admin/ServiceTest.php` (14 — inclui 4 casos de duração inválida via `#[DataProvider]`) e `ProfessionalTest.php` (10) usam `$this->actingAs($user)` — não `Sanctum::actingAs()`, que exige o trait `HasApiTokens` no model `User`; não adicionamos esse trait de propósito (não emitimos tokens de API nesta aplicação, só sessão). `$this->actingAs()` autentica no guard `web` diretamente, que é o que o `auth:sanctum` desta aplicação realmente verifica — mais simples que repetir a dança de CSRF/cookie do `AuthTest.php` em todo teste de CRUD, cuja prova já está feita separadamente.
+
+Cobertura: acesso sem sessão (`401`), listagem estável incluindo inativos, criação com validação (campos obrigatórios, duração inválida — zero/negativa/não-inteira/grande demais via `#[DataProvider]`, preço negativo recusado, **preço zero aceito**), edição parcial, ativação/desativação, `404` para id inexistente, vínculos duplicados/inexistentes recusados, semântica de `service_ids` no `PATCH` (omitir preserva, `[]` limpa), vínculo com serviço desativado preservado e sinalizado, e **atomicidade**: uma alteração com `service_ids` inválido não aplica a mudança de nome enviada junto (`assertDatabaseHas` confirma o valor antigo).
+
+Achado ao longo do caminho: o `ModelNotFoundException` de um route-model-binding que falha nunca chega ao `$exceptions->render()` registrado para ele — o handler padrão do Laravel já o reembrulha em `NotFoundHttpException` antes disso. O render de `404 NOT_FOUND` está registrado para `NotFoundHttpException`, não `ModelNotFoundException`.
+
+`backend/tests/Feature/BusinessSettingsSeederTest.php` (2) prova os defaults documentados e a idempotência (rodar o seeder duas vezes, alterar valores no meio, confirmar que a segunda chamada não sobrescreve). Achado aqui: `firstOrCreate(['id' => 1], [...])` é frágil — o `auto_increment` do MySQL **não é desfeito por rollback de transação**, então um teste anterior que criou e descartou uma linha já consome o id 1, e a segunda chamada do seeder (buscando especificamente `id=1`) não encontra nada e cria uma segunda linha. Corrigido usando `firstOrCreate([], [...])` (critério de busca vazio = "existe alguma linha?", o certo para um singleton), independente de qual id ela acabou recebendo.
+
+Resultado desta entrega: suíte completa com **41 passed** (11 de autenticação + 14 de serviços + 10 de profissionais + 2 de `business_settings` + 4 pré-existentes da fundação técnica), rodando 3× seguidas sem flakiness em Docker. Confirmado por contagem de linhas que o banco `barber_booking` (dev) não foi alterado por nenhuma execução.
 
 ## Mailpit
 
@@ -249,8 +295,18 @@ Nenhuma ferramenta de automação de navegador está disponível neste ambiente 
    - Logue com as credenciais corretas: confirme redirecionamento para `/admin/agenda`, nome/e-mail do admin exibidos, e a mensagem "a agenda será implementada em uma próxima etapa" (sem dados fictícios de reserva).
    - Recarregue a página em `/admin/agenda`: confirme um estado de carregamento breve ("Verificando sessão...") antes de mostrar o conteúdo — prova que a checagem usa `/me`, não um estado só local.
    - Clique "Sair": confirme volta para `/admin/login`. Tente recarregar `/admin/agenda` diretamente: confirme que volta para o login (sessão realmente encerrada, não só escondida na UI).
+5. Logado, abra `/admin/servicos`:
+   - Crie um serviço com preço `45,90` e confirme que a lista mostra "R$ 45,90" (prova que a conversão BRL ↔ decimal da API funciona nos dois sentidos).
+   - Clique "Editar" num serviço, confirme que o formulário vem preenchido (inclusive o preço já em `45,90`), altere e salve; confirme a mensagem de sucesso e a lista atualizada.
+   - Desmarque "Ativo" num serviço e salve; confirme que a lista mostra "Inativo" por texto (não só pela cor).
+   - Tente criar um serviço sem nome/duração/preço; confirme erros de validação ao lado de cada campo, e que o que você já tinha digitado nos outros campos continua lá.
+6. Abra `/admin/profissionais`:
+   - Crie um profissional marcando um ou mais serviços; confirme que a lista mostra os nomes dos serviços vinculados.
+   - Desative, em `/admin/servicos`, um serviço que está vinculado a esse profissional; volte para `/admin/profissionais` e confirme que o vínculo continua lá, com "(inativo)" ao lado do nome do serviço.
+   - Edite o profissional sem mexer nos checkboxes de serviço; confirme que os vínculos continuam os mesmos depois de salvar (omitir `service_ids` preserva).
+   - Teste a navegação só por teclado entre os checkboxes de serviço (Tab/Espaço) e confirme foco visível.
 
-O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), e o fluxo completo de login/sessão/logout/CSRF contra o proxy real.
+O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está documentado nas seções acima: resposta de indisponibilidade (`503` genérico, detalhe só em log), e os fluxos completos de login/sessão/logout/CSRF e de criação/edição de serviços e profissionais contra o proxy real.
 
 ## Solução de problemas comuns
 
@@ -266,8 +322,9 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 ## Limitações desta etapa
 
-- Sem cadastros de domínio (serviços, profissionais, expediente), disponibilidade, agendamento ou cancelamento. Autenticação administrativa (esta entrega) está implementada; o restante aguarda as próximas etapas.
+- Serviços, profissionais e seus vínculos estão implementados (esta entrega), assim como autenticação administrativa (entrega anterior). Expediente, bloqueios, disponibilidade, catálogo público, agendamentos, cancelamento e notificações ainda não existem.
+- `business_settings` só tem o registro singleton (seedado) e o lock usado pelas escritas de cadastro — sem tela nem endpoint de edição ainda.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
-- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade.
-- Homepage confirmada visualmente em navegador real; viewport mobile, estado de indisponibilidade e o fluxo completo de `/admin/login` e `/admin/agenda` ainda pendentes — ver roteiro manual acima.
+- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade — o lock de `business_settings` usado nos cadastros desta entrega não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
+- Homepage confirmada visualmente em navegador real; viewport mobile, estado de indisponibilidade e os fluxos completos de `/admin/login`, `/admin/agenda`, `/admin/servicos` e `/admin/profissionais` ainda pendentes de validação visual — ver roteiro manual acima.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.

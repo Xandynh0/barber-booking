@@ -1,0 +1,32 @@
+.admin-nav {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  max-width: 720px;
+  margin: 0 auto 1.5rem;
+}
+
+.admin-nav-link {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  color: var(--color-black);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.admin-nav-link:hover {
+  background: var(--color-cream-dark);
+}
+
+.admin-nav-link:focus-visible {
+  outline: 3px solid var(--color-maroon);
+  outline-offset: 1px;
+}
+
+.admin-nav-link--active {
+  background: var(--color-maroon);
+  border-color: var(--color-maroon);
+  color: var(--color-cream);
+  font-weight: bold;
+}

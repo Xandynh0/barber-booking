@@ -7,6 +7,7 @@ use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -43,6 +44,23 @@ return Application::configure(basePath: dirname(__DIR__))
                         'fields' => $e->errors(),
                     ],
                 ], $e->status);
+            }
+        });
+
+        // Laravel rewraps a failed implicit route-model binding
+        // (ModelNotFoundException) as a NotFoundHttpException before any
+        // custom renderer for the original exception runs, so this is
+        // registered for the wrapper, not ModelNotFoundException itself.
+        // It also covers a genuinely unmatched route, which is the same
+        // "not found" semantics from the client's point of view.
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return response()->json([
+                    'error' => [
+                        'code' => 'NOT_FOUND',
+                        'message' => 'Registro não encontrado.',
+                    ],
+                ], 404);
             }
         });
 
