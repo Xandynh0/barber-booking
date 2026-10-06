@@ -16,3 +16,9 @@ export function deleteScheduleBlock(id) {
     method: 'DELETE',
   })
 }
+
+export function deleteScheduleBlockGroup(groupId) {
+  return apiFetch(`/api/v1/admin/schedule-blocks/groups/${groupId}`, {
+    method: 'DELETE',
+  })
+}

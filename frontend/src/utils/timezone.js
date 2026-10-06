@@ -79,3 +79,18 @@ export function utcIsoToZonedParts(iso, timeZone) {
     time: `${parts.hour}:${parts.minute}`,
   }
 }
+
+/**
+ * Adds `days` calendar days to a "YYYY-MM-DD" string. Pure calendar
+ * arithmetic on the UTC calendar — not tied to any timezone — used to
+ * compute the exclusive end date of a "whole day" closure (next day's
+ * midnight), before that date is itself converted via
+ * `zonedWallTimeToUtcIso`.
+ */
+export function addDays(dateStr, days) {
+  const [year, month, day] = dateStr.split('-').map(Number)
+  const date = new Date(Date.UTC(year, month - 1, day))
+  date.setUTCDate(date.getUTCDate() + days)
+
+  return date.toISOString().slice(0, 10)
+}

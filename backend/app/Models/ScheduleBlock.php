@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['professional_id', 'starts_at', 'ends_at', 'reason'])]
+#[Fillable(['professional_id', 'group_id', 'starts_at', 'ends_at', 'reason'])]
 class ScheduleBlock extends Model
 {
     /** @use HasFactory<ScheduleBlockFactory> */

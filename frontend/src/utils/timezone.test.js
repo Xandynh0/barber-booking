@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { utcIsoToZonedParts, zonedWallTimeToUtcIso } from './timezone'
+import { addDays, utcIsoToZonedParts, zonedWallTimeToUtcIso } from './timezone'
 
 describe('zonedWallTimeToUtcIso', () => {
   it('converts a São Paulo wall-clock time to its UTC instant', () => {
@@ -27,5 +27,15 @@ describe('utcIsoToZonedParts', () => {
     const parts = utcIsoToZonedParts(iso, 'America/Sao_Paulo')
 
     expect(parts).toEqual({ date: '2026-03-10', time: '07:30' })
+  })
+})
+
+describe('addDays', () => {
+  it('adds a day within the same month', () => {
+    expect(addDays('2026-12-24', 1)).toBe('2026-12-25')
+  })
+
+  it('rolls over to the next month', () => {
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
   })
 })

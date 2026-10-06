@@ -35,6 +35,8 @@ Route::prefix('v1/admin')->name('admin.')->group(function () {
 
         Route::get('/schedule-blocks', [ScheduleBlockController::class, 'index'])->name('schedule-blocks.index');
         Route::post('/schedule-blocks', [ScheduleBlockController::class, 'store'])->name('schedule-blocks.store');
+        Route::delete('/schedule-blocks/groups/{groupId}', [ScheduleBlockController::class, 'destroyGroup'])
+            ->name('schedule-blocks.destroy-group');
         Route::delete('/schedule-blocks/{scheduleBlock}', [ScheduleBlockController::class, 'destroy'])
             ->name('schedule-blocks.destroy');
 
