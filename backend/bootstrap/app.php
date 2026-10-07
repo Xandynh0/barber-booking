@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\SetLocaleFromAcceptLanguage;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -18,6 +19,11 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->statefulApi();
+        // Runs first in the api group so every response below — including
+        // validation and the exception renders further down — is already in
+        // the right locale. Per-request only (see the middleware's own
+        // docblock): nothing here is persisted to session or anywhere else.
+        $middleware->prependToGroup('api', SetLocaleFromAcceptLanguage::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -29,7 +35,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'error' => [
                         'code' => 'UNAUTHENTICATED',
-                        'message' => 'Autenticação necessária.',
+                        'message' => __('errors.unauthenticated'),
                     ],
                 ], 401);
             }
@@ -40,7 +46,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'error' => [
                         'code' => 'VALIDATION_ERROR',
-                        'message' => 'Dados inválidos.',
+                        'message' => __('errors.validation_error'),
                         'fields' => $e->errors(),
                     ],
                 ], $e->status);
@@ -58,7 +64,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'error' => [
                         'code' => 'NOT_FOUND',
-                        'message' => 'Registro não encontrado.',
+                        'message' => __('errors.not_found'),
                     ],
                 ], 404);
             }
@@ -69,7 +75,7 @@ return Application::configure(basePath: dirname(__DIR__))
                 return response()->json([
                     'error' => [
                         'code' => 'SESSION_EXPIRED',
-                        'message' => 'Sessão expirada. Entre novamente.',
+                        'message' => __('errors.session_expired'),
                     ],
                 ], 419);
             }

@@ -137,4 +137,38 @@ describe('Services', () => {
 
     await waitFor(() => expect(updateService).toHaveBeenCalledWith(1, expect.objectContaining({ price: '50.00' })))
   })
+
+  it('preserves a typed price value (including an incomplete one) when the language is switched', async () => {
+    const user = userEvent.setup()
+    me.mockResolvedValue({ data: { id: 1, name: 'Admin', email: 'admin@barberbooking.test' } })
+    listServices.mockResolvedValue({ data: [] })
+
+    renderServices()
+
+    await screen.findByText('Nenhum serviço cadastrado ainda.')
+    await user.type(screen.getByLabelText('Preço (R$)'), '45,90')
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    expect(await screen.findByLabelText('Price (BRL, R$)')).toHaveValue('45.90')
+
+    await user.click(screen.getByRole('button', { name: 'Português' }))
+
+    expect(await screen.findByLabelText('Preço (R$)')).toHaveValue('45,90')
+  })
+
+  it('preserves an incomplete price entry (no misreading of the typed digits) across a language switch', async () => {
+    const user = userEvent.setup()
+    me.mockResolvedValue({ data: { id: 1, name: 'Admin', email: 'admin@barberbooking.test' } })
+    listServices.mockResolvedValue({ data: [] })
+
+    renderServices()
+
+    await screen.findByText('Nenhum serviço cadastrado ainda.')
+    await user.type(screen.getByLabelText('Preço (R$)'), '45,')
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    expect(await screen.findByLabelText('Price (BRL, R$)')).toHaveValue('45.')
+  })
 })

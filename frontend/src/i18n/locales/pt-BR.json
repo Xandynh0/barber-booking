@@ -1,0 +1,173 @@
+{
+  "common": {
+    "brand": "Barber Booking",
+    "languageSwitcher": {
+      "ariaLabel": "Escolher idioma",
+      "pt": "Português",
+      "en": "English"
+    },
+    "checkingSession": "Verificando sessão...",
+    "emptyValue": "—",
+    "actions": {
+      "save": "Salvar",
+      "saving": "Salvando...",
+      "create": "Criar",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "remove": "Remover",
+      "removing": "Removendo...",
+      "tryAgain": "Tentar novamente",
+      "loading": "Carregando...",
+      "signOut": "Sair",
+      "signingOut": "Saindo...",
+      "actionsColumn": "Ações"
+    },
+    "fields": {
+      "name": "Nome",
+      "descriptionOptional": "Descrição (opcional)",
+      "status": "Status",
+      "statusActive": "Ativo",
+      "statusInactive": "Inativo"
+    }
+  },
+  "nav": {
+    "ariaLabel": "Navegação administrativa",
+    "agenda": "Agenda",
+    "services": "Serviços",
+    "professionals": "Profissionais",
+    "workingHours": "Expediente",
+    "scheduleBlocks": "Bloqueios"
+  },
+  "adminLayout": {
+    "signedInAs": "Autenticado como {{name}} ({{email}})"
+  },
+  "home": {
+    "tagline": "Tradição no estilo. Simplicidade na agenda.",
+    "apiStatusLabel": "Status da API",
+    "statusChecking": "Verificando...",
+    "statusOnline": "Conectado",
+    "statusOffline": "Indisponível",
+    "statusDetailOnline": "API e banco de dados respondendo ({{status}}).",
+    "statusDetailOffline": "Não foi possível conectar à API no momento.",
+    "footnote": "Fundação técnica em construção — sem agendamentos reais nesta etapa."
+  },
+  "auth": {
+    "subtitle": "Acesso administrativo",
+    "emailLabel": "E-mail",
+    "passwordLabel": "Senha",
+    "submit": "Entrar",
+    "submitting": "Entrando...",
+    "errors": {
+      "invalidCredentials": "E-mail ou senha inválidos.",
+      "rateLimited": "Muitas tentativas. Aguarde um momento e tente novamente.",
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "sessionExpired": "Sessão expirada. Entre novamente.",
+      "generic": "Não foi possível entrar. Tente novamente."
+    }
+  },
+  "agenda": {
+    "placeholder": "A agenda será implementada em uma próxima etapa."
+  },
+  "services": {
+    "newTitle": "Novo serviço",
+    "editTitle": "Editar serviço",
+    "listTitle": "Serviços cadastrados",
+    "durationLabel": "Duração (minutos)",
+    "priceLabel": "Preço (R$)",
+    "pricePlaceholder": "0,00",
+    "tableDuration": "Duração",
+    "tablePrice": "Preço",
+    "durationUnit": "{{count}} min",
+    "price": "R$ {{price}}",
+    "createdSuccess": "Serviço criado com sucesso.",
+    "updatedSuccess": "Serviço atualizado com sucesso.",
+    "emptyState": "Nenhum serviço cadastrado ainda.",
+    "errors": {
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "notFound": "Este serviço não existe mais. Atualize a lista.",
+      "generic": "Não foi possível salvar. Tente novamente."
+    }
+  },
+  "professionals": {
+    "newTitle": "Novo profissional",
+    "editTitle": "Editar profissional",
+    "listTitle": "Profissionais cadastrados",
+    "servicesOffered": "Serviços oferecidos",
+    "noServicesYet": "Nenhum serviço cadastrado ainda — cadastre em \"Serviços\" primeiro.",
+    "noneLabel": "Nenhum",
+    "tableServices": "Serviços",
+    "inactiveTag": "(inativo)",
+    "createdSuccess": "Profissional criado com sucesso.",
+    "updatedSuccess": "Profissional atualizado com sucesso.",
+    "emptyState": "Nenhum profissional cadastrado ainda.",
+    "errors": {
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "notFound": "Este profissional não existe mais. Atualize a lista.",
+      "generic": "Não foi possível salvar. Tente novamente."
+    }
+  },
+  "workingHours": {
+    "title": "Expediente semanal",
+    "professionalLabel": "Profissional",
+    "noProfessionalsYet": "Nenhum profissional cadastrado ainda — cadastre em \"Profissionais\" primeiro.",
+    "dayOff": "Folga — nenhum período definido.",
+    "startLabel": "Início",
+    "endLabel": "Fim",
+    "addPeriod": "Adicionar período",
+    "removePeriod": "Remover período",
+    "saveButton": "Salvar expediente",
+    "savedSuccess": "Expediente salvo com sucesso.",
+    "periodEndBeforeStart": "O fim deve ser depois do início.",
+    "periodsOverlap": "Períodos do mesmo dia não podem se sobrepor.",
+    "weekdays": [
+      "Domingo",
+      "Segunda-feira",
+      "Terça-feira",
+      "Quarta-feira",
+      "Quinta-feira",
+      "Sexta-feira",
+      "Sábado"
+    ],
+    "errors": {
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "notFound": "Este profissional não existe mais. Atualize a página.",
+      "generic": "Não foi possível salvar. Tente novamente."
+    }
+  },
+  "scheduleBlocks": {
+    "newTitle": "Novo bloqueio",
+    "listTitle": "Bloqueios cadastrados",
+    "scopeLegend": "Alcance do bloqueio",
+    "scopeProfessional": "Profissional específico",
+    "scopeShop": "Fechamento da barbearia",
+    "shopExplanation": "Nenhum profissional atenderá durante este período.",
+    "wholeDay": "Dia inteiro",
+    "dateLabel": "Data",
+    "timezoneHint": "Horários no fuso da barbearia ({{timezone}}).",
+    "startsDateLabel": "Início — data",
+    "startsTimeLabel": "Início — hora",
+    "endsDateLabel": "Fim — data",
+    "endsTimeLabel": "Fim — hora",
+    "reasonLabel": "Motivo (opcional, uso interno)",
+    "createBlockButton": "Criar bloqueio",
+    "createClosureButton": "Criar fechamento",
+    "blockCreatedSuccess": "Bloqueio criado com sucesso.",
+    "closureCreatedSuccess": "Fechamento criado com sucesso.",
+    "emptyState": "Nenhum bloqueio cadastrado ainda.",
+    "tableScope": "Alcance",
+    "tableStart": "Início",
+    "tableEnd": "Fim",
+    "tableReason": "Motivo",
+    "rowProfessional": "Profissional: {{name}}",
+    "rowShop": "Fechamento da barbearia",
+    "removeClosure": "Remover fechamento",
+    "confirmRemoveBlock": "Remover o bloqueio de {{name}} ({{range}})? Esta ação não pode ser desfeita.",
+    "confirmRemoveClosure": "Remover o fechamento da barbearia ({{range}})? Isso libera {{count}} profissional(is) deste fechamento: {{names}}. Outros bloqueios que coincidam com este período continuam valendo. Esta ação não pode ser desfeita.",
+    "errors": {
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "notFound": "Este bloqueio não existe mais. Atualize a lista.",
+      "generic": "Não foi possível salvar. Tente novamente.",
+      "removeGeneric": "Não foi possível remover. Tente novamente."
+    }
+  }
+}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/AdminLayout'
 import { ApiError } from '../../api/client'
 import { getBusinessSettings } from '../../api/businessSettings'
@@ -24,18 +25,19 @@ const emptyForm = {
   reason: '',
 }
 
-function errorMessageFor(error) {
+function errorMessageFor(t, error) {
   if (error.code === 'NETWORK_ERROR') {
-    return 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+    return t('scheduleBlocks.errors.network')
   }
   if (error.code === 'NOT_FOUND') {
-    return 'Este bloqueio não existe mais. Atualize a lista.'
+    return t('scheduleBlocks.errors.notFound')
   }
 
-  return error.message || 'Não foi possível salvar. Tente novamente.'
+  return error.message || t('scheduleBlocks.errors.generic')
 }
 
 function ScheduleBlocks() {
+  const { t, i18n } = useTranslation()
   const [timezone, setTimezone] = useState(null)
   const [professionals, setProfessionals] = useState(null)
   const [blocks, setBlocks] = useState(null)
@@ -73,9 +75,9 @@ function ScheduleBlocks() {
         }))
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível conectar ao servidor.')
+        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('scheduleBlocks.errors.network'))
       })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadAll()
@@ -112,16 +114,18 @@ function ScheduleBlocks() {
       }
 
       await createScheduleBlock(payload)
-      setSuccessMessage(form.scope === 'shop' ? 'Fechamento criado com sucesso.' : 'Bloqueio criado com sucesso.')
+      setSuccessMessage(
+        form.scope === 'shop' ? t('scheduleBlocks.closureCreatedSuccess') : t('scheduleBlocks.blockCreatedSuccess')
+      )
       setForm((prev) => ({ ...emptyForm, scope: prev.scope, professional_id: prev.professional_id }))
       loadAll()
     } catch (error) {
       if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
         setFieldErrors(error.fields ?? {})
       } else if (error instanceof ApiError) {
-        setFormError(errorMessageFor(error))
+        setFormError(errorMessageFor(t, error))
       } else {
-        setFormError('Não foi possível salvar. Tente novamente.')
+        setFormError(t('scheduleBlocks.errors.generic'))
       }
       // Form values are intentionally left untouched on failure.
     } finally {
@@ -131,7 +135,7 @@ function ScheduleBlocks() {
 
   async function handleDeleteIndividual(item) {
     const confirmed = window.confirm(
-      `Remover o bloqueio de ${item.professional.name} (${formatRange(item, timezone)})? Esta ação não pode ser desfeita.`
+      t('scheduleBlocks.confirmRemoveBlock', { name: item.professional.name, range: formatRange(item, timezone, i18n.language) })
     )
     if (!confirmed) return
 
@@ -142,7 +146,7 @@ function ScheduleBlocks() {
       await deleteScheduleBlock(item.id)
       setBlocks((prev) => prev.filter((b) => !(b.kind === 'professional' && b.id === item.id)))
     } catch (error) {
-      setFormError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível remover. Tente novamente.')
+      setFormError(error instanceof ApiError ? errorMessageFor(t, error) : t('scheduleBlocks.errors.removeGeneric'))
     } finally {
       setRemovingKey(null)
     }
@@ -151,9 +155,11 @@ function ScheduleBlocks() {
   async function handleDeleteGroup(item) {
     const names = item.professionals.map((p) => p.name).join(', ')
     const confirmed = window.confirm(
-      `Remover o fechamento da barbearia (${formatRange(item, timezone)})? ` +
-        `Isso libera ${item.professionals.length} profissional(is) deste fechamento: ${names}. ` +
-        'Outros bloqueios que coincidam com este período continuam valendo. Esta ação não pode ser desfeita.'
+      t('scheduleBlocks.confirmRemoveClosure', {
+        range: formatRange(item, timezone, i18n.language),
+        count: item.professionals.length,
+        names,
+      })
     )
     if (!confirmed) return
 
@@ -164,7 +170,7 @@ function ScheduleBlocks() {
       await deleteScheduleBlockGroup(item.group_id)
       setBlocks((prev) => prev.filter((b) => !(b.kind === 'shop' && b.group_id === item.group_id)))
     } catch (error) {
-      setFormError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível remover. Tente novamente.')
+      setFormError(error instanceof ApiError ? errorMessageFor(t, error) : t('scheduleBlocks.errors.removeGeneric'))
     } finally {
       setRemovingKey(null)
     }
@@ -176,7 +182,7 @@ function ScheduleBlocks() {
     <AdminLayout>
       <div className="admin-content">
         <section className="admin-card">
-          <h2>Novo bloqueio</h2>
+          <h2>{t('scheduleBlocks.newTitle')}</h2>
 
           {formError && (
             <p className="admin-form-error" role="alert">
@@ -189,15 +195,13 @@ function ScheduleBlocks() {
             </p>
           )}
 
-          {professionals !== null && professionals.length === 0 && (
-            <p>Nenhum profissional cadastrado ainda — cadastre em "Profissionais" primeiro.</p>
-          )}
+          {professionals !== null && professionals.length === 0 && <p>{t('scheduleBlocks.noProfessionalsYet')}</p>}
 
           {professionals !== null && professionals.length > 0 && (
             <form onSubmit={handleSubmit} noValidate>
               <div className="admin-form-grid">
                 <fieldset className="admin-field admin-field--full">
-                  <legend>Alcance do bloqueio</legend>
+                  <legend>{t('scheduleBlocks.scopeLegend')}</legend>
                   <div className="admin-radio-group">
                     <label className="admin-radio-option" htmlFor={scopeProfessionalId}>
                       <input
@@ -208,7 +212,7 @@ function ScheduleBlocks() {
                         checked={form.scope === 'professional'}
                         onChange={() => setForm((prev) => ({ ...prev, scope: 'professional' }))}
                       />
-                      Profissional específico
+                      {t('scheduleBlocks.scopeProfessional')}
                     </label>
                     <label className="admin-radio-option" htmlFor={scopeShopId}>
                       <input
@@ -219,17 +223,15 @@ function ScheduleBlocks() {
                         checked={form.scope === 'shop'}
                         onChange={() => setForm((prev) => ({ ...prev, scope: 'shop' }))}
                       />
-                      Fechamento da barbearia
+                      {t('scheduleBlocks.scopeShop')}
                     </label>
                   </div>
-                  {form.scope === 'shop' && (
-                    <p className="admin-hint">Nenhum profissional atenderá durante este período.</p>
-                  )}
+                  {form.scope === 'shop' && <p className="admin-hint">{t('scheduleBlocks.shopExplanation')}</p>}
                 </fieldset>
 
                 {form.scope === 'professional' && (
                   <div className="admin-field admin-field--full">
-                    <label htmlFor={professionalSelectId}>Profissional</label>
+                    <label htmlFor={professionalSelectId}>{t('scheduleBlocks.professionalLabel')}</label>
                     <select
                       id={professionalSelectId}
                       value={form.professional_id}
@@ -255,15 +257,15 @@ function ScheduleBlocks() {
                       checked={form.wholeDay}
                       onChange={(event) => setForm((prev) => ({ ...prev, wholeDay: event.target.checked }))}
                     />
-                    <label htmlFor={wholeDayId}>Dia inteiro</label>
+                    <label htmlFor={wholeDayId}>{t('scheduleBlocks.wholeDay')}</label>
                   </div>
                 )}
 
-                <p className="admin-hint admin-field--full">Horários no fuso da barbearia ({timezone}).</p>
+                <p className="admin-hint admin-field--full">{t('scheduleBlocks.timezoneHint', { timezone })}</p>
 
                 {form.scope === 'shop' && form.wholeDay ? (
                   <div className="admin-field admin-field--full">
-                    <label htmlFor={wholeDayDateId}>Data</label>
+                    <label htmlFor={wholeDayDateId}>{t('scheduleBlocks.dateLabel')}</label>
                     <input
                       id={wholeDayDateId}
                       type="date"
@@ -275,7 +277,7 @@ function ScheduleBlocks() {
                 ) : (
                   <>
                     <div className="admin-field">
-                      <label htmlFor={startsDateId}>Início — data</label>
+                      <label htmlFor={startsDateId}>{t('scheduleBlocks.startsDateLabel')}</label>
                       <input
                         id={startsDateId}
                         type="date"
@@ -285,7 +287,7 @@ function ScheduleBlocks() {
                       />
                     </div>
                     <div className="admin-field">
-                      <label htmlFor={startsTimeId}>Início — hora</label>
+                      <label htmlFor={startsTimeId}>{t('scheduleBlocks.startsTimeLabel')}</label>
                       <input
                         id={startsTimeId}
                         type="time"
@@ -296,7 +298,7 @@ function ScheduleBlocks() {
                     </div>
 
                     <div className="admin-field">
-                      <label htmlFor={endsDateId}>Fim — data</label>
+                      <label htmlFor={endsDateId}>{t('scheduleBlocks.endsDateLabel')}</label>
                       <input
                         id={endsDateId}
                         type="date"
@@ -306,7 +308,7 @@ function ScheduleBlocks() {
                       />
                     </div>
                     <div className="admin-field">
-                      <label htmlFor={endsTimeId}>Fim — hora</label>
+                      <label htmlFor={endsTimeId}>{t('scheduleBlocks.endsTimeLabel')}</label>
                       <input
                         id={endsTimeId}
                         type="time"
@@ -319,7 +321,7 @@ function ScheduleBlocks() {
                 )}
 
                 <div className="admin-field admin-field--full">
-                  <label htmlFor={reasonId}>Motivo (opcional, uso interno)</label>
+                  <label htmlFor={reasonId}>{t('scheduleBlocks.reasonLabel')}</label>
                   <input
                     id={reasonId}
                     value={form.reason}
@@ -330,7 +332,11 @@ function ScheduleBlocks() {
 
               <div className="admin-form-actions">
                 <button type="submit" className="admin-button" disabled={submitting}>
-                  {submitting ? 'Salvando...' : form.scope === 'shop' ? 'Criar fechamento' : 'Criar bloqueio'}
+                  {submitting
+                    ? t('common.actions.saving')
+                    : form.scope === 'shop'
+                      ? t('scheduleBlocks.createClosureButton')
+                      : t('scheduleBlocks.createBlockButton')}
                 </button>
               </div>
             </form>
@@ -338,32 +344,32 @@ function ScheduleBlocks() {
         </section>
 
         <section className="admin-card">
-          <h2>Bloqueios cadastrados</h2>
+          <h2>{t('scheduleBlocks.listTitle')}</h2>
 
-          {loading && <p>Carregando...</p>}
+          {loading && <p>{t('common.actions.loading')}</p>}
 
           {loadError && (
             <div role="alert">
               <p className="admin-form-error">{loadError}</p>
               <button type="button" className="admin-button" onClick={loadAll}>
-                Tentar novamente
+                {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {blocks !== null && blocks.length === 0 && <p>Nenhum bloqueio cadastrado ainda.</p>}
+          {blocks !== null && blocks.length === 0 && <p>{t('scheduleBlocks.emptyState')}</p>}
 
           {blocks !== null && blocks.length > 0 && (
             <div className="admin-table-wrapper">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th scope="col">Alcance</th>
-                    <th scope="col">Início</th>
-                    <th scope="col">Fim</th>
-                    <th scope="col">Motivo</th>
+                    <th scope="col">{t('scheduleBlocks.tableScope')}</th>
+                    <th scope="col">{t('scheduleBlocks.tableStart')}</th>
+                    <th scope="col">{t('scheduleBlocks.tableEnd')}</th>
+                    <th scope="col">{t('scheduleBlocks.tableReason')}</th>
                     <th scope="col">
-                      <span className="sr-only">Ações</span>
+                      <span className="sr-only">{t('common.actions.actionsColumn')}</span>
                     </th>
                   </tr>
                 </thead>
@@ -371,35 +377,49 @@ function ScheduleBlocks() {
                   {blocks.map((item) =>
                     item.kind === 'shop' ? (
                       <tr key={`shop-${item.group_id}`}>
-                        <td data-label="Alcance">Fechamento da barbearia</td>
-                        <td data-label="Início">{formatInstant(item.starts_at, timezone)}</td>
-                        <td data-label="Fim">{formatInstant(item.ends_at, timezone)}</td>
-                        <td data-label="Motivo">{item.reason || '—'}</td>
-                        <td data-label="Ações">
+                        <td data-label={t('scheduleBlocks.tableScope')}>{t('scheduleBlocks.rowShop')}</td>
+                        <td data-label={t('scheduleBlocks.tableStart')}>
+                          {formatInstant(item.starts_at, timezone, i18n.language)}
+                        </td>
+                        <td data-label={t('scheduleBlocks.tableEnd')}>
+                          {formatInstant(item.ends_at, timezone, i18n.language)}
+                        </td>
+                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
                             className="admin-button admin-button--secondary"
                             onClick={() => handleDeleteGroup(item)}
                             disabled={removingKey === `shop-${item.group_id}`}
                           >
-                            {removingKey === `shop-${item.group_id}` ? 'Removendo...' : 'Remover fechamento'}
+                            {removingKey === `shop-${item.group_id}`
+                              ? t('common.actions.removing')
+                              : t('scheduleBlocks.removeClosure')}
                           </button>
                         </td>
                       </tr>
                     ) : (
                       <tr key={`professional-${item.id}`}>
-                        <td data-label="Alcance">Profissional: {item.professional.name}</td>
-                        <td data-label="Início">{formatInstant(item.starts_at, timezone)}</td>
-                        <td data-label="Fim">{formatInstant(item.ends_at, timezone)}</td>
-                        <td data-label="Motivo">{item.reason || '—'}</td>
-                        <td data-label="Ações">
+                        <td data-label={t('scheduleBlocks.tableScope')}>
+                          {t('scheduleBlocks.rowProfessional', { name: item.professional.name })}
+                        </td>
+                        <td data-label={t('scheduleBlocks.tableStart')}>
+                          {formatInstant(item.starts_at, timezone, i18n.language)}
+                        </td>
+                        <td data-label={t('scheduleBlocks.tableEnd')}>
+                          {formatInstant(item.ends_at, timezone, i18n.language)}
+                        </td>
+                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
                             className="admin-button admin-button--secondary"
                             onClick={() => handleDeleteIndividual(item)}
                             disabled={removingKey === `professional-${item.id}`}
                           >
-                            {removingKey === `professional-${item.id}` ? 'Removendo...' : 'Remover'}
+                            {removingKey === `professional-${item.id}`
+                              ? t('common.actions.removing')
+                              : t('common.actions.remove')}
                           </button>
                         </td>
                       </tr>
@@ -415,15 +435,16 @@ function ScheduleBlocks() {
   )
 }
 
-function formatInstant(iso, timezone) {
+function formatInstant(iso, timezone, locale) {
   if (!timezone) return iso
   const { date, time } = utcIsoToZonedParts(iso, timezone)
   const [year, month, day] = date.split('-')
-  return `${day}/${month}/${year} ${time}`
+
+  return locale === 'en' ? `${month}/${day}/${year} ${time}` : `${day}/${month}/${year} ${time}`
 }
 
-function formatRange(item, timezone) {
-  return `${formatInstant(item.starts_at, timezone)} – ${formatInstant(item.ends_at, timezone)}`
+function formatRange(item, timezone, locale) {
+  return `${formatInstant(item.starts_at, timezone, locale)} – ${formatInstant(item.ends_at, timezone, locale)}`
 }
 
 export default ScheduleBlocks

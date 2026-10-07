@@ -137,6 +137,14 @@
   gap: 1rem;
   max-width: 720px;
   margin: 0 auto 1.5rem;
+  flex-wrap: wrap;
+}
+
+.admin-shell-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
 }
 
 .admin-placeholder {

@@ -62,7 +62,7 @@ class UpdateWorkingHoursRequest extends FormRequest
                     if ($start >= $end) {
                         $validator->errors()->add(
                             "days.{$dayIndex}.periods.{$periodIndex}.end_time",
-                            'O fim deve ser depois do início.',
+                            __('errors.period_end_before_start'),
                         );
 
                         continue;
@@ -77,7 +77,7 @@ class UpdateWorkingHoursRequest extends FormRequest
                     if ($withValidTimes[$i]['start'] < $withValidTimes[$i - 1]['end']) {
                         $validator->errors()->add(
                             "days.{$dayIndex}.periods.{$withValidTimes[$i]['index']}.start_time",
-                            'Períodos do mesmo dia não podem se sobrepor.',
+                            __('errors.periods_overlap'),
                         );
                     }
                 }

@@ -1,14 +1,11 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { fetchHealth } from '../api/health'
+import { LanguageSwitcher } from '../components/LanguageSwitcher'
 import '../App.css'
 
-function statusLabel(state) {
-  if (state === 'checking') return 'Verificando...'
-  if (state === 'online') return 'Conectado'
-  return 'Indisponível'
-}
-
 function Home() {
+  const { t } = useTranslation()
   const [state, setState] = useState('checking')
   const [detail, setDetail] = useState('')
 
@@ -19,7 +16,7 @@ function Home() {
       .then((body) => {
         if (cancelled) return
         setState('online')
-        setDetail(`API e banco de dados respondendo (${body.status}).`)
+        setDetail(t('home.statusDetailOnline', { status: body.status }))
       })
       .catch((error) => {
         if (cancelled) return
@@ -30,27 +27,33 @@ function Home() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [t])
+
+  const statusLabel = { checking: t('home.statusChecking'), online: t('home.statusOnline'), offline: t('home.statusOffline') }[
+    state
+  ]
 
   return (
     <main className="page">
-      <h1 className="brand">Barber Booking</h1>
-      <p className="tagline">Tradição no estilo. Simplicidade na agenda.</p>
+      <div className="page-top-bar">
+        <LanguageSwitcher />
+      </div>
+
+      <h1 className="brand">{t('common.brand')}</h1>
+      <p className="tagline">{t('home.tagline')}</p>
 
       <hr className="rule" />
 
       <div className="status-card">
-        <span className="status-label">Status da API</span>
+        <span className="status-label">{t('home.apiStatusLabel')}</span>
         <span className="status-value" data-state={state}>
           <span className="status-dot" aria-hidden="true" />
-          {statusLabel(state)}
+          {statusLabel}
         </span>
         {detail && <p className="status-detail">{detail}</p>}
       </div>
 
-      <p className="footnote">
-        Fundação técnica em construção — sem agendamentos reais nesta etapa.
-      </p>
+      <p className="footnote">{t('home.footnote')}</p>
     </main>
   )
 }

@@ -1,33 +1,24 @@
 import { useCallback, useEffect, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/AdminLayout'
 import { ApiError } from '../../api/client'
 import { listProfessionals } from '../../api/professionals'
 import { getWorkingHours, updateWorkingHours } from '../../api/workingHours'
 import './admin.css'
 
-const WEEKDAY_LABELS = [
-  'Domingo',
-  'Segunda-feira',
-  'Terça-feira',
-  'Quarta-feira',
-  'Quinta-feira',
-  'Sexta-feira',
-  'Sábado',
-]
-
 function emptyWeek() {
   return Array.from({ length: 7 }, (_, weekday) => ({ weekday, periods: [] }))
 }
 
-function errorMessageFor(error) {
+function errorMessageFor(t, error) {
   if (error.code === 'NETWORK_ERROR') {
-    return 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+    return t('workingHours.errors.network')
   }
   if (error.code === 'NOT_FOUND') {
-    return 'Este profissional não existe mais. Atualize a página.'
+    return t('workingHours.errors.notFound')
   }
 
-  return error.message || 'Não foi possível salvar. Tente novamente.'
+  return error.message || t('workingHours.errors.generic')
 }
 
 /**
@@ -51,6 +42,8 @@ function groupFieldErrorsByDay(fields) {
 }
 
 function WorkingHours() {
+  const { t } = useTranslation()
+  const weekdayLabels = t('workingHours.weekdays', { returnObjects: true })
   const [professionals, setProfessionals] = useState(null)
   const [professionalId, setProfessionalId] = useState('')
   const [days, setDays] = useState(emptyWeek())
@@ -77,32 +70,35 @@ function WorkingHours() {
         }
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível conectar ao servidor.')
+        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('workingHours.errors.network'))
       })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadProfessionals()
   }, [loadProfessionals])
 
-  const loadSchedule = useCallback((id) => {
-    if (!id) return
+  const loadSchedule = useCallback(
+    (id) => {
+      if (!id) return
 
-    setLoading(true)
-    setLoadError(null)
-    setFormError(null)
-    setFieldErrorsByDay({})
-    setSuccessMessage(null)
+      setLoading(true)
+      setLoadError(null)
+      setFormError(null)
+      setFieldErrorsByDay({})
+      setSuccessMessage(null)
 
-    getWorkingHours(id)
-      .then((body) => {
-        setDays(body.data.days)
-      })
-      .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível conectar ao servidor.')
-      })
-      .finally(() => setLoading(false))
-  }, [])
+      getWorkingHours(id)
+        .then((body) => {
+          setDays(body.data.days)
+        })
+        .catch((error) => {
+          setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('workingHours.errors.network'))
+        })
+        .finally(() => setLoading(false))
+    },
+    [t]
+  )
 
   useEffect(() => {
     if (professionalId) {
@@ -151,14 +147,14 @@ function WorkingHours() {
     try {
       const body = await updateWorkingHours(professionalId, { days })
       setDays(body.data.days)
-      setSuccessMessage('Expediente salvo com sucesso.')
+      setSuccessMessage(t('workingHours.savedSuccess'))
     } catch (error) {
       if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
         setFieldErrorsByDay(groupFieldErrorsByDay(error.fields))
       } else if (error instanceof ApiError) {
-        setFormError(errorMessageFor(error))
+        setFormError(errorMessageFor(t, error))
       } else {
-        setFormError('Não foi possível salvar. Tente novamente.')
+        setFormError(t('workingHours.errors.generic'))
       }
       // Form values are intentionally left untouched on failure.
     } finally {
@@ -170,25 +166,23 @@ function WorkingHours() {
     <AdminLayout>
       <div className="admin-content">
         <section className="admin-card">
-          <h2>Expediente semanal</h2>
+          <h2>{t('workingHours.title')}</h2>
 
           {loadError && professionals === null && (
             <div role="alert">
               <p className="admin-form-error">{loadError}</p>
               <button type="button" className="admin-button" onClick={loadProfessionals}>
-                Tentar novamente
+                {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {professionals !== null && professionals.length === 0 && (
-            <p>Nenhum profissional cadastrado ainda — cadastre em "Profissionais" primeiro.</p>
-          )}
+          {professionals !== null && professionals.length === 0 && <p>{t('workingHours.noProfessionalsYet')}</p>}
 
           {professionals !== null && professionals.length > 0 && (
             <>
               <div className="admin-field">
-                <label htmlFor={professionalSelectId}>Profissional</label>
+                <label htmlFor={professionalSelectId}>{t('workingHours.professionalLabel')}</label>
                 <select
                   id={professionalSelectId}
                   value={professionalId}
@@ -197,7 +191,7 @@ function WorkingHours() {
                   {professionals.map((professional) => (
                     <option key={professional.id} value={professional.id}>
                       {professional.name}
-                      {!professional.is_active ? ' (inativo)' : ''}
+                      {!professional.is_active ? ` ${t('professionals.inactiveTag')}` : ''}
                     </option>
                   ))}
                 </select>
@@ -214,13 +208,13 @@ function WorkingHours() {
                 </p>
               )}
 
-              {loading && <p>Carregando...</p>}
+              {loading && <p>{t('common.actions.loading')}</p>}
 
               {loadError && professionals !== null && (
                 <div role="alert">
                   <p className="admin-form-error">{loadError}</p>
                   <button type="button" className="admin-button" onClick={() => loadSchedule(professionalId)}>
-                    Tentar novamente
+                    {t('common.actions.tryAgain')}
                   </button>
                 </div>
               )}
@@ -229,14 +223,14 @@ function WorkingHours() {
                 <form onSubmit={handleSubmit} noValidate>
                   {days.map((day, dayIndex) => (
                     <div className="admin-day-row" key={day.weekday}>
-                      <h3>{WEEKDAY_LABELS[day.weekday]}</h3>
+                      <h3>{weekdayLabels[day.weekday]}</h3>
 
-                      {day.periods.length === 0 && <p className="admin-day-off">Folga — nenhum período definido.</p>}
+                      {day.periods.length === 0 && <p className="admin-day-off">{t('workingHours.dayOff')}</p>}
 
                       {day.periods.map((period, periodIndex) => (
                         <div className="admin-period-row" key={periodIndex}>
                           <div className="admin-field">
-                            <label htmlFor={`start-${dayIndex}-${periodIndex}`}>Início</label>
+                            <label htmlFor={`start-${dayIndex}-${periodIndex}`}>{t('workingHours.startLabel')}</label>
                             <input
                               id={`start-${dayIndex}-${periodIndex}`}
                               type="time"
@@ -248,7 +242,7 @@ function WorkingHours() {
                             />
                           </div>
                           <div className="admin-field">
-                            <label htmlFor={`end-${dayIndex}-${periodIndex}`}>Fim</label>
+                            <label htmlFor={`end-${dayIndex}-${periodIndex}`}>{t('workingHours.endLabel')}</label>
                             <input
                               id={`end-${dayIndex}-${periodIndex}`}
                               type="time"
@@ -262,7 +256,7 @@ function WorkingHours() {
                             className="admin-button admin-button--secondary"
                             onClick={() => removePeriod(dayIndex, periodIndex)}
                           >
-                            Remover período
+                            {t('workingHours.removePeriod')}
                           </button>
                         </div>
                       ))}
@@ -278,14 +272,14 @@ function WorkingHours() {
                         className="admin-button admin-button--secondary"
                         onClick={() => addPeriod(dayIndex)}
                       >
-                        Adicionar período
+                        {t('workingHours.addPeriod')}
                       </button>
                     </div>
                   ))}
 
                   <div className="admin-form-actions">
                     <button type="submit" className="admin-button" disabled={submitting}>
-                      {submitting ? 'Salvando...' : 'Salvar expediente'}
+                      {submitting ? t('common.actions.saving') : t('workingHours.saveButton')}
                     </button>
                   </div>
                 </form>

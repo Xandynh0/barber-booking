@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/AdminLayout'
 import { ApiError } from '../../api/client'
 import { listServices } from '../../api/services'
@@ -16,18 +17,19 @@ function toFormState(professional) {
   }
 }
 
-function errorMessageFor(error) {
+function errorMessageFor(t, error) {
   if (error.code === 'NETWORK_ERROR') {
-    return 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+    return t('professionals.errors.network')
   }
   if (error.code === 'NOT_FOUND') {
-    return 'Este profissional não existe mais. Atualize a lista.'
+    return t('professionals.errors.notFound')
   }
 
-  return error.message || 'Não foi possível salvar. Tente novamente.'
+  return error.message || t('professionals.errors.generic')
 }
 
 function Professionals() {
+  const { t } = useTranslation()
   const [professionals, setProfessionals] = useState(null)
   const [services, setServices] = useState(null)
   const [loadError, setLoadError] = useState(null)
@@ -53,9 +55,9 @@ function Professionals() {
         setServices(servicesBody.data)
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível conectar ao servidor.')
+        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('professionals.errors.network'))
       })
-  }, [])
+  }, [t])
 
   useEffect(() => {
     loadAll()
@@ -104,10 +106,10 @@ function Professionals() {
     try {
       if (editingId) {
         await updateProfessional(editingId, payload)
-        setSuccessMessage('Profissional atualizado com sucesso.')
+        setSuccessMessage(t('professionals.updatedSuccess'))
       } else {
         await createProfessional(payload)
-        setSuccessMessage('Profissional criado com sucesso.')
+        setSuccessMessage(t('professionals.createdSuccess'))
       }
       startCreate()
       loadAll()
@@ -115,9 +117,9 @@ function Professionals() {
       if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
         setFieldErrors(error.fields ?? {})
       } else if (error instanceof ApiError) {
-        setFormError(errorMessageFor(error))
+        setFormError(errorMessageFor(t, error))
       } else {
-        setFormError('Não foi possível salvar. Tente novamente.')
+        setFormError(t('professionals.errors.generic'))
       }
       // Form values are intentionally left untouched on failure.
     } finally {
@@ -131,7 +133,7 @@ function Professionals() {
     <AdminLayout>
       <div className="admin-content">
         <section className="admin-card">
-          <h2>{editingId ? 'Editar profissional' : 'Novo profissional'}</h2>
+          <h2>{editingId ? t('professionals.editTitle') : t('professionals.newTitle')}</h2>
 
           {formError && (
             <p className="admin-form-error" role="alert">
@@ -147,7 +149,7 @@ function Professionals() {
           <form onSubmit={handleSubmit} noValidate>
             <div className="admin-form-grid">
               <div className="admin-field admin-field--full">
-                <label htmlFor={nameId}>Nome</label>
+                <label htmlFor={nameId}>{t('common.fields.name')}</label>
                 <input
                   id={nameId}
                   value={form.name}
@@ -164,7 +166,7 @@ function Professionals() {
               </div>
 
               <div className="admin-field admin-field--full">
-                <label htmlFor={descriptionId}>Descrição (opcional)</label>
+                <label htmlFor={descriptionId}>{t('common.fields.descriptionOptional')}</label>
                 <textarea
                   id={descriptionId}
                   value={form.description}
@@ -180,10 +182,8 @@ function Professionals() {
               </div>
 
               <fieldset className="admin-field admin-field--full">
-                <legend>Serviços oferecidos</legend>
-                {services !== null && services.length === 0 && (
-                  <p>Nenhum serviço cadastrado ainda — cadastre em "Serviços" primeiro.</p>
-                )}
+                <legend>{t('professionals.servicesOffered')}</legend>
+                {services !== null && services.length === 0 && <p>{t('professionals.noServicesYet')}</p>}
                 {services !== null && services.length > 0 && (
                   <div className="admin-service-picker">
                     {services.map((service) => (
@@ -194,7 +194,7 @@ function Professionals() {
                           onChange={() => toggleService(service.id)}
                         />
                         {service.name}
-                        {!service.is_active && <span className="admin-tag-inactive"> (inativo)</span>}
+                        {!service.is_active && <span className="admin-tag-inactive"> {t('professionals.inactiveTag')}</span>}
                       </label>
                     ))}
                   </div>
@@ -211,17 +211,17 @@ function Professionals() {
                   checked={form.is_active}
                   onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
                 />
-                <label htmlFor={activeId}>Ativo</label>
+                <label htmlFor={activeId}>{t('common.fields.statusActive')}</label>
               </div>
             </div>
 
             <div className="admin-form-actions">
               <button type="submit" className="admin-button" disabled={submitting}>
-                {submitting ? 'Salvando...' : editingId ? 'Salvar' : 'Criar'}
+                {submitting ? t('common.actions.saving') : editingId ? t('common.actions.save') : t('common.actions.create')}
               </button>
               {editingId && (
                 <button type="button" className="admin-button admin-button--secondary" onClick={startCreate}>
-                  Cancelar
+                  {t('common.actions.cancel')}
                 </button>
               )}
             </div>
@@ -229,64 +229,66 @@ function Professionals() {
         </section>
 
         <section className="admin-card">
-          <h2>Profissionais cadastrados</h2>
+          <h2>{t('professionals.listTitle')}</h2>
 
-          {loading && <p>Carregando...</p>}
+          {loading && <p>{t('common.actions.loading')}</p>}
 
           {loadError && (
             <div role="alert">
               <p className="admin-form-error">{loadError}</p>
               <button type="button" className="admin-button" onClick={loadAll}>
-                Tentar novamente
+                {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {professionals !== null && professionals.length === 0 && <p>Nenhum profissional cadastrado ainda.</p>}
+          {professionals !== null && professionals.length === 0 && <p>{t('professionals.emptyState')}</p>}
 
           {professionals !== null && professionals.length > 0 && (
             <div className="admin-table-wrapper">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th scope="col">Nome</th>
-                    <th scope="col">Serviços</th>
-                    <th scope="col">Status</th>
+                    <th scope="col">{t('common.fields.name')}</th>
+                    <th scope="col">{t('professionals.tableServices')}</th>
+                    <th scope="col">{t('common.fields.status')}</th>
                     <th scope="col">
-                      <span className="sr-only">Ações</span>
+                      <span className="sr-only">{t('common.actions.actionsColumn')}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {professionals.map((professional) => (
                     <tr key={professional.id}>
-                      <td data-label="Nome">{professional.name}</td>
-                      <td data-label="Serviços">
+                      <td data-label={t('common.fields.name')}>{professional.name}</td>
+                      <td data-label={t('professionals.tableServices')}>
                         {professional.services.length === 0 ? (
-                          <span>Nenhum</span>
+                          <span>{t('professionals.noneLabel')}</span>
                         ) : (
                           professional.services.map((service, index) => (
                             <span key={service.id}>
                               {index > 0 && ', '}
                               {service.name}
-                              {!service.is_active && <span className="admin-tag-inactive"> (inativo)</span>}
+                              {!service.is_active && (
+                                <span className="admin-tag-inactive"> {t('professionals.inactiveTag')}</span>
+                              )}
                             </span>
                           ))
                         )}
                       </td>
-                      <td data-label="Status">
+                      <td data-label={t('common.fields.status')}>
                         <span className="admin-status" data-active={professional.is_active}>
                           <span className="admin-status-dot" aria-hidden="true" />
-                          {professional.is_active ? 'Ativo' : 'Inativo'}
+                          {professional.is_active ? t('common.fields.statusActive') : t('common.fields.statusInactive')}
                         </span>
                       </td>
-                      <td data-label="Ações">
+                      <td data-label={t('common.actions.actionsColumn')}>
                         <button
                           type="button"
                           className="admin-button admin-button--secondary"
                           onClick={() => startEdit(professional)}
                         >
-                          Editar
+                          {t('common.actions.edit')}
                         </button>
                       </td>
                     </tr>

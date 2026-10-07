@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
+import { ApiError } from './api/client'
 
 // This exercises the real App tree (real BrowserRouter, real nested
 // AdminArea <Routes>, real AdminLayout/AdminNav), unlike the per-page tests
@@ -84,5 +86,59 @@ describe('App routing (admin area)', () => {
     expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Expediente' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Bloqueios cadastrados' })).toBeInTheDocument()
+  })
+})
+
+describe('Language switching (App/router real)', () => {
+  beforeEach(() => {
+    me.mockResolvedValue({ data: { id: 1, name: 'Admin', email: 'admin@barberbooking.test' } })
+    listServices.mockResolvedValue({ data: [] })
+    listProfessionals.mockResolvedValue({ data: [] })
+  })
+
+  afterEach(() => {
+    vi.resetAllMocks()
+  })
+
+  it('switches the public homepage to English without a page reload', async () => {
+    const user = userEvent.setup()
+    renderAppAt('/')
+
+    expect(await screen.findByText('Tradição no estilo. Simplicidade na agenda.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    expect(await screen.findByText('Tradition in style. Simplicity in scheduling.')).toBeInTheDocument()
+    expect(document.documentElement.lang).toBe('en')
+  })
+
+  it('switches the login screen to English while preserving typed form values', async () => {
+    const user = userEvent.setup()
+    me.mockRejectedValue(new ApiError(401, 'UNAUTHENTICATED', 'Autenticação necessária.'))
+    renderAppAt('/admin/login')
+
+    await screen.findByLabelText('E-mail')
+    await user.type(screen.getByLabelText('E-mail'), 'admin@barberbooking.test')
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    expect(await screen.findByLabelText('Email')).toHaveValue('admin@barberbooking.test')
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
+  })
+
+  it('switches the admin nav to English without losing the authenticated session', async () => {
+    const user = userEvent.setup()
+    renderAppAt('/admin/agenda')
+
+    expect(await screen.findByRole('link', { name: 'Serviços' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    expect(await screen.findByRole('link', { name: 'Services' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Professionals' })).toBeInTheDocument()
+    // Still on the agenda screen, still authenticated — switching language
+    // never redirects to login or re-triggers the session check.
+    expect(screen.getByText('The schedule will be implemented in a future stage.')).toBeInTheDocument()
+    expect(me).toHaveBeenCalledTimes(1)
   })
 })
