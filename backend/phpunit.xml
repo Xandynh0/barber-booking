@@ -18,38 +18,45 @@
         </include>
     </source>
     <php>
-        <!-- Forced: same env_file issue as DB_TEST_DATABASE below — docker-compose bakes
-             APP_ENV=local as a real container env var, so a non-forced override here was
-             silently ignored. That let Laravel's own CSRF middleware's test-mode bypass
-             (runningUnitTests(), tied to APP_ENV=testing) go unnoticed in Docker while still
-             triggering elsewhere (native PHP, CI), which is exactly how a CSRF test passed
-             locally for the wrong reason and failed in CI. force="true" makes APP_ENV=testing
-             consistent everywhere this suite runs. -->
-        <env name="APP_ENV" value="testing" force="true"/>
-        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
-        <env name="BCRYPT_ROUNDS" value="4"/>
-        <env name="BROADCAST_CONNECTION" value="null"/>
-        <env name="CACHE_STORE" value="array"/>
-        <env name="DB_CONNECTION" value="sqlite"/>
-        <env name="DB_DATABASE" value=":memory:"/>
-        <!-- Forced: docker-compose's env_file bakes DB_DATABASE as a real container env var, which a
-             non-forced override here cannot beat. force="true" guarantees the mysql connection
-             (config/database.php) always points at an isolated test database, never the development one,
-             regardless of how the process was launched. -->
-        <env name="DB_TEST_DATABASE" value="barber_booking_test" force="true"/>
-        <env name="DB_URL" value=""/>
-        <env name="MAIL_MAILER" value="array"/>
-        <env name="QUEUE_CONNECTION" value="sync"/>
-        <!-- Forced to "database" (not "array") so login/me/logout tests exercise the real
-             MySQL-backed session store, same as production, instead of a driver that would
-             never be used outside tests. -->
-        <env name="SESSION_DRIVER" value="database" force="true"/>
-        <!-- Low, forced limits so rate-limit tests can trip the 429 without waiting a real
-             minute or sending dozens of requests. -->
-        <env name="ADMIN_LOGIN_THROTTLE_PER_EMAIL" value="2" force="true"/>
-        <env name="ADMIN_LOGIN_THROTTLE_PER_IP" value="3" force="true"/>
-        <env name="PULSE_ENABLED" value="false"/>
-        <env name="TELESCOPE_ENABLED" value="false"/>
-        <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Why <server> and not <env force="true">: Laravel reads environment variables from
+             $_SERVER first (Illuminate\Support\Env → ServerConstAdapter, then EnvConstAdapter), and
+             PHP fills $_SERVER with the real process environment. Inside Docker that environment
+             comes from docker-compose's env_file (backend/.env: APP_ENV=local, MAIL_MAILER=smtp,
+             CACHE_STORE=database, ...). PHPUnit's <env force="true"> only writes putenv()/$_ENV, so it
+             never beat a variable the container already had — the suite silently ran as "local",
+             sent real mail to Mailpit and used the development throttle limits. It only "worked" for
+             DB_TEST_DATABASE because that variable does not exist in the container. <server> writes
+             $_SERVER directly, so these values win wherever the suite runs (Docker, CI, native PHP).
+             tests/Feature/TestEnvironmentTest.php asserts the effective result inside the test
+             process, so a regression fails loudly. See docs/desenvolvimento.md, "Ambiente de testes". -->
+
+        <!-- APP_ENV=testing: Laravel's test-mode behavior (runningUnitTests()), including the CSRF
+             bypass — the one CSRF test re-enables the middleware explicitly (AuthTest). -->
+        <server name="APP_ENV" value="testing"/>
+        <server name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <server name="BCRYPT_ROUNDS" value="4"/>
+        <server name="BROADCAST_CONNECTION" value="null"/>
+        <server name="CACHE_STORE" value="array"/>
+        <!-- Always the real MySQL server (this project never validates database behavior on
+             SQLite), always the isolated test database, never the development one. The mysql
+             connection reads DB_TEST_DATABASE first (config/database.php). -->
+        <server name="DB_CONNECTION" value="mysql"/>
+        <server name="DB_DATABASE" value="barber_booking_test"/>
+        <server name="DB_TEST_DATABASE" value="barber_booking_test"/>
+        <server name="DB_URL" value=""/>
+        <!-- No message from the suite may reach Mailpit: the array transport keeps them in memory.
+             Tests that check e-mail use Mail::fake() or configure the transport themselves. -->
+        <server name="MAIL_MAILER" value="array"/>
+        <server name="QUEUE_CONNECTION" value="sync"/>
+        <!-- "database" (not "array") so login/me/logout tests exercise the real MySQL-backed
+             session store, same as production, instead of a driver never used outside tests. -->
+        <server name="SESSION_DRIVER" value="database"/>
+        <!-- Low limits so rate-limit tests can trip the 429 without waiting a real minute or
+             sending dozens of requests. -->
+        <server name="ADMIN_LOGIN_THROTTLE_PER_EMAIL" value="2"/>
+        <server name="ADMIN_LOGIN_THROTTLE_PER_IP" value="3"/>
+        <server name="PULSE_ENABLED" value="false"/>
+        <server name="TELESCOPE_ENABLED" value="false"/>
+        <server name="NIGHTWATCH_ENABLED" value="false"/>
     </php>
 </phpunit>

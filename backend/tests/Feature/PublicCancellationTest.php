@@ -135,6 +135,25 @@ class PublicCancellationTest extends TestCase
         $this->assertDatabaseCount('appointments', 1);
     }
 
+    public function test_the_cancel_form_rejects_a_missing_csrf_token_and_accepts_a_valid_one(): void
+    {
+        // Laravel skips CSRF verification whenever runningUnitTests() is
+        // true (APP_ENV=testing, now really in effect in Docker too). Same
+        // explicit override as AuthTest, scoped to this one test, so the
+        // middleware actually runs.
+        $this->app->instance('env', 'production');
+        $link = $this->linkFor($this->appointment);
+
+        $this->withSession(['_token' => 'test-csrf-token'])->post($link)
+            ->assertStatus(419)
+            ->assertSee('Abra o link do e-mail novamente para cancelar.');
+        $this->assertSame(Appointment::STATUS_CONFIRMED, $this->appointment->fresh()->status);
+
+        $this->withSession(['_token' => 'test-csrf-token'])->post($link, ['_token' => 'test-csrf-token'])
+            ->assertStatus(303);
+        $this->assertSame(Appointment::STATUS_CANCELLED, $this->appointment->fresh()->status);
+    }
+
     public function test_cancelling_twice_is_harmless(): void
     {
         $link = $this->linkFor($this->appointment);

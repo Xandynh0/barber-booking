@@ -315,7 +315,9 @@ class AuthTest extends TestCase
                 'password' => 'correct-horse-battery-staple',
             ]);
 
-        $rejected->assertStatus(419);
+        $rejected->assertStatus(419)
+            ->assertJsonPath('error.code', 'SESSION_EXPIRED')
+            ->assertJsonMissingPath('trace');
 
         // 2) Same session, this time with the valid X-XSRF-TOKEN header the
         // priming request issued — must be accepted. Proves the middleware

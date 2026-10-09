@@ -12,6 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -56,8 +57,15 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
-        $exceptions->render(function (TokenMismatchException $e, Request $request) use ($cancellationPage) {
-            if ($request->is('cancelar/*')) {
+        // Laravel converts TokenMismatchException into HttpException(419)
+        // (Handler::prepareException) *before* calling these callbacks, so a
+        // callback typed on TokenMismatchException is never reached. Both
+        // CSRF renderers below match the converted exception instead.
+        $isCsrfFailure = fn (HttpExceptionInterface $e) => $e->getStatusCode() === 419
+            && $e->getPrevious() instanceof TokenMismatchException;
+
+        $exceptions->render(function (HttpExceptionInterface $e, Request $request) use ($cancellationPage, $isCsrfFailure) {
+            if ($request->is('cancelar/*') && $isCsrfFailure($e)) {
                 return $cancellationPage(419, 'booking.cancel.form_expired');
             }
         });
@@ -122,8 +130,8 @@ return Application::configure(basePath: dirname(__DIR__))
             ], 409);
         });
 
-        $exceptions->render(function (TokenMismatchException $e, Request $request) {
-            if ($request->is('api/*') || $request->expectsJson()) {
+        $exceptions->render(function (HttpExceptionInterface $e, Request $request) use ($isCsrfFailure) {
+            if ($isCsrfFailure($e) && ($request->is('api/*') || $request->expectsJson())) {
                 return response()->json([
                     'error' => [
                         'code' => 'SESSION_EXPIRED',
