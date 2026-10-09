@@ -546,6 +546,37 @@ Proteção contra double booking: a transação trava `business_settings` (prime
 
 Diferenças em relação ao planejado:
 
-- A resposta ainda não tem `notification_status`: o e-mail de confirmação, a tabela `appointment_notifications` e o cancelamento por link assinado (seção 6) ficam para a próxima entrega.
+- `notification_status` (`pending`, `sent`, `failed` ou `skipped`) passou a existir na entrega seguinte; ver seção 18.
 - A resposta vem dentro de `data`, como nos demais endpoints.
 - Regras da seção 7 implementadas para bloqueios e expediente, com `409 APPOINTMENT_CONFLICT` e `error.conflicts`; ver `docs/desenvolvimento.md`.
+
+## 18. Contratos implementados — Confirmação por e-mail e cancelamento pelo cliente
+
+### Confirmação
+
+- `appointment_notifications` (seção 4): `kind=confirmation`, criada `pending` na mesma transação da reserva, entregue **depois do commit**, de forma síncrona (o projeto não tem worker de fila).
+- Resultado em `status`: `sent`, `failed` (só a classe do erro em `last_error_code`) ou `skipped` (a reserva não está mais confirmada e futura na hora do envio).
+- Varredura `appointments:send-pending-confirmations`, agendada a cada minuto: pendentes ou falhas sem atualização há 2 minutos, até 5 tentativas.
+- `POST /api/v1/public/appointments` passa a devolver `data.notification_status`. Um replay idempotente não envia outro e-mail.
+- Conteúdo do e-mail: serviço, duração e preço dos snapshots; profissional; data e hora no fuso da barbearia; endereço e telefone da barbearia, quando cadastrados; código público; link de cancelamento.
+
+### Cancelamento
+
+`GET` e `POST /cancelar/{public_id}?expires={timestamp}&signature={hmac}`, páginas Laravel fora de `/api`, sem login.
+
+- **Assinatura:** `temporarySignedRoute` relativa (caminho + query), expirando em `starts_at`, verificada nos dois métodos. Nada do link é persistido.
+- **GET:** resumo mínimo, sem contatos e sem alterar nada.
+- **POST:** com CSRF; cancela e responde `303` para o mesmo GET assinado.
+
+| Situação | Resposta |
+| --- | --- |
+| Assinatura válida, reserva confirmada, `agora < início − cancel_min_notice_minutes` | POST cancela (`cancelled`, `cancelled_at`, `cancelled_by=customer`); página "Reserva cancelada" |
+| Reserva já cancelada | Nada muda; página "já está cancelada" |
+| Prazo de cancelamento encerrado, antes do início | Nada muda; a página explica que o prazo acabou |
+| Assinatura ausente, alterada ou expirada (depois do início), ou `public_id` trocado | `403`, página genérica |
+| Assinatura válida para uma reserva inexistente | `404`, a mesma página genérica |
+| Acima de 30 por minuto por IP | `429` |
+
+Cabeçalhos: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex` e CSP sem scripts. O access log do proxy grava só o caminho, sem a assinatura.
+
+Diferenças em relação ao planejado: nenhuma no contrato. O envio é síncrono após o commit, em vez de por fila, porque não há worker no compose. Reenvio e cancelamento pelo admin ficam para a etapa de operação da agenda.
