@@ -343,7 +343,7 @@ Depois de criada, a reserva pública recebe um e-mail de confirmação com um li
 ### Fluxo pós-reserva
 
 1. Dentro da transação da reserva, junto do `INSERT`, é gravada uma `appointment_notifications` (`kind=confirmation`, `status=pending`). Se a transação for desfeita, ela some junto: não existe confirmação sem reserva.
-2. **Depois do commit**, o controller entrega o e-mail (`ConfirmationNotifier`). A entrega é registrada com `DB::afterCommit()`, que roda na hora quando não há transação aberta e esperaria o commit mais externo se a chamada um dia ficasse dentro de uma. O e-mail nunca sai antes de a reserva estar gravada: `ConfirmationAfterCommitTest` confere, por uma segunda conexão MySQL, que a reserva já está visível no momento do envio.
+2. **Depois do commit**, o controller envia o e-mail (`ConfirmationNotifier`). O envio é registrado com `DB::afterCommit()`, que roda na hora quando não há transação aberta e esperaria o commit mais externo se a chamada um dia ficasse dentro de uma. O e-mail nunca sai antes de a reserva estar gravada: `ConfirmationAfterCommitTest` confere, por uma segunda conexão MySQL, que a reserva já está visível no momento do envio.
 3. O resultado vai para a notificação: `sent` (com `sent_at`); `failed`, com só a **classe** da exceção em `last_error_code`, nunca a mensagem, que pode ter endereços; ou `skipped`, se na hora do envio a reserva não estiver mais confirmada e futura. Uma falha de e-mail **não desfaz a reserva**.
 4. A varredura `php artisan appointments:send-pending-confirmations` reenvia o que ficou `pending` ou `failed`. Ela está agendada a cada minuto em `routes/console.php`.
    - Só pega notificações sem atualização há 2 minutos, para não disputar com o envio da própria requisição.
@@ -356,16 +356,16 @@ O envio é **síncrono** na requisição, depois do commit, e não por fila. O p
 
 O SMTP tem **timeout de 5 s** (`MAIL_TIMEOUT`, padrão 5, em `config/mail.php`). Antes ele não tinha limite próprio e herdava o `default_socket_timeout` do PHP (60 s). Com um provedor lento, a requisição de reserva ficava presa e o proxy respondia `504` ao cliente, **embora a reserva já estivesse gravada e confirmada**. Reproduzido nesta entrega com o Mailpit pausado: 60 s e `504` antes da correção; `201` em 8 s com `notification_status: "failed"` depois dela, e o e-mail recuperado pela varredura.
 
-### Garantia real de entrega do e-mail
+### Envio do e-mail: o que é e o que não é garantido
 
-A entrega é **pelo menos uma vez, com tentativas limitadas**, e não "exatamente uma vez". O que cada caso garante:
+O que existe é **envio com tentativas limitadas, possibilidade de falha definitiva e risco residual de duplicidade**. Não há garantia de entrega: com até 5 tentativas, um e-mail pode nunca chegar. Também não há "exatamente uma vez": em um caso raro, o mesmo e-mail pode sair duas vezes. Cada situação:
 
-| Situação | O que acontece | Garantia |
+| Situação | O que acontece | Resultado |
 |---|---|---|
 | Replay idempotente da criação (mesma `Idempotency-Key`) | Devolve a reserva existente; nenhuma notificação nova, nenhum envio | Nenhum e-mail a mais (testado) |
 | Duas tentativas de envio concorrentes da mesma notificação (requisição × varredura, ou duas varreduras) | Cada uma faz um `UPDATE` condicional em `attempts`; só a que muda a linha envia. A varredura só pega linhas sem atualização há 2 min, e o SMTP tem timeout de 5 s, então a requisição já terminou quando a varredura as vê | Um envio só (testado) |
 | O SMTP aceitou a mensagem, mas o processo morreu antes de gravar `sent` | A notificação fica `pending` ou `failed` com a tentativa contada; a varredura reenvia depois de 2 min | **Pode duplicar.** Risco residual aceito no MVP (seção 6 do planejamento: "entrega externa pode se repetir"). Evitá-lo exigiria um protocolo com o provedor (por exemplo, chave de idempotência no envio), desproporcional agora |
-| Falha de SMTP | Reserva intacta; `failed` com só a classe do erro; a varredura tenta até 5 vezes | Recuperação automática enquanto houver tentativas; depois disso, o status fica `failed` sem alerta |
+| Falha de SMTP | Reserva intacta; `failed` com só a classe do erro; a varredura tenta de novo, até 5 tentativas no total | Novas tentativas enquanto houver; **se todas falharem, a falha é definitiva**: o cliente não recebe a confirmação, o status fica `failed` e ninguém é alertado |
 | Reserva cancelada ou já iniciada antes do envio | `skipped`, nada é enviado | Nenhuma confirmação obsoleta (testado). A checagem é imediatamente antes do envio, então um cancelamento no mesmo instante ainda pode deixar sair o e-mail |
 
 **Nenhum envio segura lock ou transação.** O envio da requisição acontece depois do commit (`DB::afterCommit`), e a varredura não abre transação. `ConfirmationAfterCommitTest` confere, nos dois caminhos e no instante do envio, que não há transação aberta e que outra conexão consegue `SELECT ... FOR UPDATE NOWAIT` em `business_settings`: o SMTP nunca trava a agenda da barbearia.

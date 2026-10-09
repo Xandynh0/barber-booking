@@ -554,7 +554,7 @@ Diferenças em relação ao planejado:
 
 ### Confirmação
 
-- `appointment_notifications` (seção 4): `kind=confirmation`, criada `pending` na mesma transação da reserva, entregue **depois do commit**, de forma síncrona (o projeto não tem worker de fila).
+- `appointment_notifications` (seção 4): `kind=confirmation`, criada `pending` na mesma transação da reserva, enviada **depois do commit**, de forma síncrona (o projeto não tem worker de fila). Envio com tentativas limitadas (até 5), possibilidade de falha definitiva e risco residual de duplicidade; não há garantia de entrega.
 - Resultado em `status`: `sent`, `failed` (só a classe do erro em `last_error_code`) ou `skipped` (a reserva não está mais confirmada e futura na hora do envio).
 - Varredura `appointments:send-pending-confirmations`, agendada a cada minuto: pendentes ou falhas sem atualização há 2 minutos, até 5 tentativas.
 - `POST /api/v1/public/appointments` passa a devolver `data.notification_status`. Um replay idempotente não envia outro e-mail.
