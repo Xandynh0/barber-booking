@@ -59,6 +59,24 @@ describe('apiFetch', () => {
     await expect(apiFetch('/api/v1/admin/me')).rejects.toMatchObject({ code: 'NETWORK_ERROR' })
   })
 
+  it('uses a translated message (not a raw i18n key) for a fetch-level failure', async () => {
+    fetch.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    await expect(apiFetch('/api/v1/admin/me')).rejects.toMatchObject({
+      code: 'NETWORK_ERROR',
+      message: 'Não foi possível conectar ao servidor. Verifique sua conexão.',
+    })
+  })
+
+  it('uses a translated generic message when an error response has no error body', async () => {
+    fetch.mockResolvedValue({ ok: false, status: 500, json: async () => ({ message: 'Server Error' }) })
+
+    await expect(apiFetch('/api/v1/admin/me')).rejects.toMatchObject({
+      code: 'UNKNOWN_ERROR',
+      message: 'Ocorreu um erro inesperado. Tente novamente.',
+    })
+  })
+
   it('sends the decoded XSRF-TOKEN cookie as the X-XSRF-TOKEN header on non-GET requests', async () => {
     document.cookie = 'XSRF-TOKEN=abc%20123'
     fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) })

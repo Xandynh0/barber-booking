@@ -1,11 +1,14 @@
+import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/AdminLayout'
 import './admin.css'
 
 function Agenda() {
+  const { t } = useTranslation()
+
   return (
     <AdminLayout>
       <section className="admin-card admin-placeholder">
-        <p>A agenda será implementada em uma próxima etapa.</p>
+        <p>{t('agenda.placeholder')}</p>
       </section>
     </AdminLayout>
   )

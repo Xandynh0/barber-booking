@@ -74,7 +74,7 @@ class ScheduleBlockController extends Controller
 
             if (! $professional) {
                 throw ValidationException::withMessages([
-                    'professional_id' => ['Profissional informado não existe.'],
+                    'professional_id' => [__('errors.professional_not_found')],
                 ]);
             }
 

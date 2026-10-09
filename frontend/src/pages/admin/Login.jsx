@@ -1,27 +1,30 @@
 import { useId, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../api/client'
+import { LanguageSwitcher } from '../../components/LanguageSwitcher'
 import { useAuth } from '../../context/AuthContext'
 import './admin.css'
 
-function errorMessageFor(error) {
+function errorMessageFor(t, error) {
   if (error.code === 'INVALID_CREDENTIALS') {
-    return 'E-mail ou senha inválidos.'
+    return t('auth.errors.invalidCredentials')
   }
   if (error.code === 'RATE_LIMITED') {
-    return 'Muitas tentativas. Aguarde um momento e tente novamente.'
+    return t('auth.errors.rateLimited')
   }
   if (error.code === 'NETWORK_ERROR') {
-    return 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+    return t('auth.errors.network')
   }
   if (error.code === 'SESSION_EXPIRED') {
-    return 'Sessão expirada. Entre novamente.'
+    return t('auth.errors.sessionExpired')
   }
 
-  return error.message || 'Não foi possível entrar. Tente novamente.'
+  return error.message || t('auth.errors.generic')
 }
 
 function Login() {
+  const { t } = useTranslation()
   const { status, sessionExpired, login } = useAuth()
   const navigate = useNavigate()
   const emailId = useId()
@@ -31,14 +34,17 @@ function Login() {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [fieldErrors, setFieldErrors] = useState({})
-  const [formError, setFormError] = useState(
-    sessionExpired ? 'Sessão expirada. Entre novamente.' : null
-  )
+  const [formError, setFormError] = useState(null)
+
+  // sessionExpired can flip to true after the initial render (the /me check
+  // resolves asynchronously), so the message is derived on every render
+  // instead of captured once in useState's initial value.
+  const effectiveFormError = formError ?? (sessionExpired ? t('auth.errors.sessionExpired') : null)
 
   if (status === 'checking') {
     return (
       <main className="admin-checking">
-        <p>Verificando sessão...</p>
+        <p>{t('common.checkingSession')}</p>
       </main>
     )
   }
@@ -64,9 +70,9 @@ function Login() {
         setFieldErrors(error.fields ?? {})
         setFormError(null)
       } else if (error instanceof ApiError) {
-        setFormError(errorMessageFor(error))
+        setFormError(errorMessageFor(t, error))
       } else {
-        setFormError('Não foi possível entrar. Tente novamente.')
+        setFormError(t('auth.errors.generic'))
       }
     } finally {
       setSubmitting(false)
@@ -75,18 +81,22 @@ function Login() {
 
   return (
     <main className="admin-page admin-page--centered">
-      <form className="admin-card admin-login-card" onSubmit={handleSubmit} noValidate>
-        <h1 className="admin-brand">Barber Booking</h1>
-        <p className="admin-subtitle">Acesso administrativo</p>
+      <div className="page-top-bar">
+        <LanguageSwitcher />
+      </div>
 
-        {formError && (
+      <form className="admin-card admin-login-card" onSubmit={handleSubmit} noValidate>
+        <h1 className="admin-brand">{t('common.brand')}</h1>
+        <p className="admin-subtitle">{t('auth.subtitle')}</p>
+
+        {effectiveFormError && (
           <p className="admin-form-error" role="alert">
-            {formError}
+            {effectiveFormError}
           </p>
         )}
 
         <div className="admin-field">
-          <label htmlFor={emailId}>E-mail</label>
+          <label htmlFor={emailId}>{t('auth.emailLabel')}</label>
           <input
             id={emailId}
             name="email"
@@ -106,7 +116,7 @@ function Login() {
         </div>
 
         <div className="admin-field">
-          <label htmlFor={passwordId}>Senha</label>
+          <label htmlFor={passwordId}>{t('auth.passwordLabel')}</label>
           <input
             id={passwordId}
             name="password"
@@ -126,7 +136,7 @@ function Login() {
         </div>
 
         <button type="submit" className="admin-button" disabled={submitting}>
-          {submitting ? 'Entrando...' : 'Entrar'}
+          {submitting ? t('auth.submitting') : t('auth.submit')}
         </button>
       </form>
     </main>

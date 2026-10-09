@@ -100,7 +100,7 @@ class ProfessionalController extends Controller
 
         if ($missingIds !== []) {
             throw ValidationException::withMessages([
-                'service_ids' => ['Um ou mais serviços informados não existem.'],
+                'service_ids' => [__('errors.service_ids_missing')],
             ]);
         }
     }

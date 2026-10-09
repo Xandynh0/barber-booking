@@ -1,0 +1,179 @@
+{
+  "common": {
+    "brand": "Barber Booking",
+    "languageSwitcher": {
+      "ariaLabel": "Choose language",
+      "pt": "Português",
+      "en": "English"
+    },
+    "checkingSession": "Checking session...",
+    "emptyValue": "—",
+    "actions": {
+      "save": "Save",
+      "saving": "Saving...",
+      "create": "Create",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "remove": "Remove",
+      "removing": "Removing...",
+      "tryAgain": "Try again",
+      "loading": "Loading...",
+      "signOut": "Sign out",
+      "signingOut": "Signing out...",
+      "actionsColumn": "Actions"
+    },
+    "fields": {
+      "name": "Name",
+      "descriptionOptional": "Description (optional)",
+      "status": "Status",
+      "statusActive": "Active",
+      "statusInactive": "Inactive"
+    },
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "generic": "An unexpected error occurred. Please try again."
+    }
+  },
+  "nav": {
+    "ariaLabel": "Admin navigation",
+    "agenda": "Schedule",
+    "services": "Services",
+    "professionals": "Professionals",
+    "workingHours": "Working hours",
+    "scheduleBlocks": "Blocks"
+  },
+  "adminLayout": {
+    "signedInAs": "Signed in as {{name}} ({{email}})"
+  },
+  "home": {
+    "tagline": "Tradition in style. Simplicity in scheduling.",
+    "apiStatusLabel": "API status",
+    "statusChecking": "Checking...",
+    "statusOnline": "Connected",
+    "statusOffline": "Unavailable",
+    "statusDetailOnline": "API and database responding ({{status}}).",
+    "statusDetailOffline": "Could not connect to the API right now.",
+    "footnote": "Technical foundation under construction — no real bookings at this stage."
+  },
+  "auth": {
+    "subtitle": "Administrative access",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in...",
+    "errors": {
+      "invalidCredentials": "Invalid email or password.",
+      "rateLimited": "Too many attempts. Please wait a moment and try again.",
+      "network": "Could not connect to the server. Check your connection.",
+      "sessionExpired": "Session expired. Please sign in again.",
+      "generic": "Could not sign in. Please try again."
+    }
+  },
+  "agenda": {
+    "placeholder": "The schedule will be implemented in a future stage."
+  },
+  "services": {
+    "newTitle": "New service",
+    "editTitle": "Edit service",
+    "listTitle": "Registered services",
+    "durationLabel": "Duration (minutes)",
+    "priceLabel": "Price (BRL, R$)",
+    "pricePlaceholder": "0.00",
+    "tableDuration": "Duration",
+    "tablePrice": "Price",
+    "durationUnit": "{{count}} min",
+    "price": "R$ {{price}}",
+    "createdSuccess": "Service created successfully.",
+    "updatedSuccess": "Service updated successfully.",
+    "emptyState": "No services registered yet.",
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "notFound": "This service no longer exists. Refresh the list.",
+      "generic": "Could not save. Please try again."
+    }
+  },
+  "professionals": {
+    "newTitle": "New professional",
+    "editTitle": "Edit professional",
+    "listTitle": "Registered professionals",
+    "servicesOffered": "Services offered",
+    "noServicesYet": "No services registered yet — register one under \"Services\" first.",
+    "noneLabel": "None",
+    "tableServices": "Services",
+    "inactiveTag": "(inactive)",
+    "createdSuccess": "Professional created successfully.",
+    "updatedSuccess": "Professional updated successfully.",
+    "emptyState": "No professionals registered yet.",
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "notFound": "This professional no longer exists. Refresh the list.",
+      "generic": "Could not save. Please try again."
+    }
+  },
+  "workingHours": {
+    "title": "Weekly schedule",
+    "professionalLabel": "Professional",
+    "noProfessionalsYet": "No professionals registered yet — register one under \"Professionals\" first.",
+    "dayOff": "Day off — no period defined.",
+    "startLabel": "Start",
+    "endLabel": "End",
+    "addPeriod": "Add period",
+    "removePeriod": "Remove period",
+    "saveButton": "Save schedule",
+    "savedSuccess": "Schedule saved successfully.",
+    "periodEndBeforeStart": "The end must be after the start.",
+    "periodsOverlap": "Periods on the same day cannot overlap.",
+    "weekdays": [
+      "Sunday",
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday"
+    ],
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "notFound": "This professional no longer exists. Refresh the page.",
+      "generic": "Could not save. Please try again."
+    }
+  },
+  "scheduleBlocks": {
+    "newTitle": "New block",
+    "listTitle": "Registered blocks",
+    "scopeLegend": "Block scope",
+    "scopeProfessional": "Specific professional",
+    "scopeShop": "Barbershop closure",
+    "shopExplanation": "No professional will serve customers during this period.",
+    "wholeDay": "Whole day",
+    "dateLabel": "Date",
+    "timezoneHint": "Times in the barbershop's timezone ({{timezone}}).",
+    "startsDateLabel": "Start — date",
+    "startsTimeLabel": "Start — time",
+    "endsDateLabel": "End — date",
+    "endsTimeLabel": "End — time",
+    "reasonLabel": "Reason (optional, internal use)",
+    "createBlockButton": "Create block",
+    "createClosureButton": "Create closure",
+    "blockCreatedSuccess": "Block created successfully.",
+    "closureCreatedSuccess": "Closure created successfully.",
+    "emptyState": "No blocks registered yet.",
+    "tableScope": "Scope",
+    "tableStart": "Start",
+    "tableEnd": "End",
+    "tableReason": "Reason",
+    "rowProfessional": "Professional: {{name}}",
+    "rowShop": "Barbershop closure",
+    "removeClosure": "Remove closure",
+    "confirmRemoveBlock": "Remove the block for {{name}} ({{range}})? This action cannot be undone.",
+    "confirmRemoveClosure": "Remove the barbershop closure ({{range}})? This releases {{count}} professional(s) from this closure: {{names}}. Other blocks that overlap this period remain in effect. This action cannot be undone.",
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "notFound": "This block no longer exists. Refresh the list.",
+      "generic": "Could not save. Please try again.",
+      "removeGeneric": "Could not remove. Please try again."
+    },
+    "professionalLabel": "Professional",
+    "noProfessionalsYet": "No professionals registered yet — register one under \"Professionals\" first."
+  }
+}

@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import { AuthProvider } from '../../context/AuthContext'
+import i18n from '../../i18n'
 import WorkingHours from './WorkingHours'
 
 vi.mock('../../api/auth')
@@ -134,5 +135,41 @@ describe('WorkingHours', () => {
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
 
     await waitFor(() => expect(screen.getByText('Domingo')).toBeInTheDocument())
+  })
+
+  it('keeps unsaved period edits and does not reload when the language changes', async () => {
+    const user = userEvent.setup()
+    getWorkingHours.mockResolvedValue({ data: emptyWeekData() })
+
+    renderWorkingHours()
+
+    await screen.findByText('Domingo')
+    await user.click(screen.getAllByRole('button', { name: 'Adicionar período' })[0])
+    await user.type(screen.getAllByLabelText('Início')[0], '09:00')
+
+    await act(() => i18n.changeLanguage('en'))
+
+    expect(await screen.findByText('Sunday')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('09:00')).toBeInTheDocument()
+    expect(listProfessionals).toHaveBeenCalledTimes(1)
+    expect(getWorkingHours).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the selected professional when the language changes', async () => {
+    const user = userEvent.setup()
+    listProfessionals.mockResolvedValue({ data: [professional, { ...professional, id: 2, name: 'Bruno' }] })
+    getWorkingHours.mockResolvedValue({ data: emptyWeekData() })
+
+    renderWorkingHours()
+
+    await screen.findByText('Domingo')
+    await user.selectOptions(screen.getByRole('combobox'), '2')
+    await waitFor(() => expect(getWorkingHours).toHaveBeenLastCalledWith('2'))
+
+    await act(() => i18n.changeLanguage('en'))
+
+    expect(await screen.findByText('Sunday')).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toHaveValue('2')
+    expect(getWorkingHours).toHaveBeenCalledTimes(2)
   })
 })

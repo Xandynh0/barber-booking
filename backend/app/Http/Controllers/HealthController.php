@@ -21,7 +21,7 @@ class HealthController extends Controller
             return response()->json([
                 'error' => [
                     'code' => 'SERVICE_UNAVAILABLE',
-                    'message' => 'Serviço indisponível no momento.',
+                    'message' => __('errors.service_unavailable'),
                 ],
             ], 503);
         }

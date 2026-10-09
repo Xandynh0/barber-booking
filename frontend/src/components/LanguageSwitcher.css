@@ -1,0 +1,31 @@
+.language-switcher {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.language-switcher-option {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-black);
+  cursor: pointer;
+}
+
+.language-switcher-option:hover {
+  background: var(--color-cream-dark);
+}
+
+.language-switcher-option:focus-visible {
+  outline: 3px solid var(--color-maroon);
+  outline-offset: 1px;
+}
+
+.language-switcher-option--active {
+  background: var(--color-maroon);
+  border-color: var(--color-maroon);
+  color: var(--color-cream);
+  font-weight: bold;
+}

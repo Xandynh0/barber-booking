@@ -290,4 +290,49 @@ describe('ScheduleBlocks', () => {
     await waitFor(() => expect(screen.queryByRole('cell', { name: 'Fechamento da barbearia' })).not.toBeInTheDocument())
     expect(screen.getByText('Profissional: Lucas')).toBeInTheDocument()
   })
+
+  it('submits the same UTC instant for a whole-day closure regardless of the UI language', async () => {
+    const user = userEvent.setup()
+    listScheduleBlocks.mockResolvedValue({ data: [] })
+    createScheduleBlock.mockResolvedValue({ data: shopClosure })
+
+    renderScheduleBlocks()
+
+    await screen.findByText('Nenhum bloqueio cadastrado ainda.')
+    await user.click(screen.getByRole('button', { name: 'English' }))
+
+    await user.click(screen.getByRole('radio', { name: 'Barbershop closure' }))
+    await user.click(screen.getByLabelText('Whole day'))
+    await user.type(screen.getByLabelText('Date'), '2026-12-25')
+    await user.click(screen.getByRole('button', { name: 'Create closure' }))
+
+    await waitFor(() =>
+      expect(createScheduleBlock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scope: 'shop',
+          // Same instants the pt-BR "whole day" test expects (see the
+          // backend's equivalent test): the UI language only changes
+          // labels/formatting, never the computed UTC instant.
+          starts_at: new Date('2026-12-25T03:00:00.000Z').toISOString(),
+          ends_at: new Date('2026-12-26T03:00:00.000Z').toISOString(),
+        })
+      )
+    )
+  })
+
+  it('labels the professional field and explains when no professional exists yet', async () => {
+    listScheduleBlocks.mockResolvedValue({ data: [] })
+
+    const { unmount } = renderScheduleBlocks()
+
+    expect(await screen.findByLabelText('Profissional')).toBeInTheDocument()
+    unmount()
+
+    listProfessionals.mockResolvedValue({ data: [] })
+    renderScheduleBlocks()
+
+    expect(
+      await screen.findByText('Nenhum profissional cadastrado ainda — cadastre em "Profissionais" primeiro.')
+    ).toBeInTheDocument()
+  })
 })

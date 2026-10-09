@@ -53,7 +53,7 @@ class AppServiceProvider extends ServiceProvider
         return response()->json([
             'error' => [
                 'code' => 'RATE_LIMITED',
-                'message' => 'Muitas tentativas. Tente novamente em instantes.',
+                'message' => __('errors.rate_limited'),
             ],
         ], 429, $headers);
     }

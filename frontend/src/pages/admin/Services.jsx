@@ -1,34 +1,36 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { AdminLayout } from '../../components/AdminLayout'
 import { ApiError } from '../../api/client'
 import { createService, listServices, updateService } from '../../api/services'
-import { parseBRLInput, toBRLInput } from '../../utils/money'
+import { parseMoneyInput, swapMoneySeparator, toMoneyInput } from '../../utils/money'
 import './admin.css'
 
 const emptyForm = { name: '', description: '', duration_minutes: '', price: '', is_active: true }
 
-function toFormState(service) {
+function toFormState(service, locale) {
   return {
     name: service.name,
     description: service.description ?? '',
     duration_minutes: String(service.duration_minutes),
-    price: toBRLInput(service.price),
+    price: toMoneyInput(service.price, locale),
     is_active: service.is_active,
   }
 }
 
-function errorMessageFor(error) {
+function errorMessageFor(t, error) {
   if (error.code === 'NETWORK_ERROR') {
-    return 'Não foi possível conectar ao servidor. Verifique sua conexão.'
+    return t('services.errors.network')
   }
   if (error.code === 'NOT_FOUND') {
-    return 'Este serviço não existe mais. Atualize a lista.'
+    return t('services.errors.notFound')
   }
 
-  return error.message || 'Não foi possível salvar. Tente novamente.'
+  return error.message || t('services.errors.generic')
 }
 
 function Services() {
+  const { t, i18n } = useTranslation()
   const [services, setServices] = useState(null)
   const [loadError, setLoadError] = useState(null)
   const [editingId, setEditingId] = useState(null)
@@ -44,6 +46,26 @@ function Services() {
   const priceId = useId()
   const activeId = useId()
 
+  const previousLanguage = useRef(i18n.language)
+
+  // Reformats the price field to the new language's convention (comma vs.
+  // dot decimal) WITHOUT changing the monetary value — including an
+  // incomplete, still-being-typed entry — so switching language never
+  // discards or misreads what the admin already typed.
+  useEffect(() => {
+    const fromLanguage = previousLanguage.current
+    const toLanguage = i18n.language
+
+    if (fromLanguage !== toLanguage) {
+      // Captured as fixed locals above — not read back off the ref inside
+      // the updater, which React may invoke after the synchronous line
+      // below has already moved the ref on to `toLanguage` (making the
+      // swap a same-language no-op).
+      setForm((prev) => ({ ...prev, price: swapMoneySeparator(prev.price, fromLanguage, toLanguage) }))
+      previousLanguage.current = toLanguage
+    }
+  }, [i18n.language])
+
   const loadServices = useCallback(() => {
     setLoadError(null)
     setServices(null)
@@ -51,7 +73,7 @@ function Services() {
     listServices()
       .then((body) => setServices(body.data))
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(error) : 'Não foi possível conectar ao servidor.')
+        setLoadError(error)
       })
   }, [])
 
@@ -68,7 +90,7 @@ function Services() {
 
   function startEdit(service) {
     setEditingId(service.id)
-    setForm(toFormState(service))
+    setForm(toFormState(service, i18n.language))
     setFieldErrors({})
     setFormError(null)
     setSuccessMessage(null)
@@ -78,7 +100,7 @@ function Services() {
     event.preventDefault()
     if (submitting) return
 
-    const price = parseBRLInput(form.price)
+    const price = parseMoneyInput(form.price, i18n.language)
     const duration = Number(form.duration_minutes)
 
     setSubmitting(true)
@@ -97,10 +119,10 @@ function Services() {
     try {
       if (editingId) {
         await updateService(editingId, payload)
-        setSuccessMessage('Serviço atualizado com sucesso.')
+        setSuccessMessage(t('services.updatedSuccess'))
       } else {
         await createService(payload)
-        setSuccessMessage('Serviço criado com sucesso.')
+        setSuccessMessage(t('services.createdSuccess'))
       }
       startCreate()
       loadServices()
@@ -108,9 +130,9 @@ function Services() {
       if (error instanceof ApiError && error.code === 'VALIDATION_ERROR') {
         setFieldErrors(error.fields ?? {})
       } else if (error instanceof ApiError) {
-        setFormError(errorMessageFor(error))
+        setFormError(errorMessageFor(t, error))
       } else {
-        setFormError('Não foi possível salvar. Tente novamente.')
+        setFormError(t('services.errors.generic'))
       }
       // Form values are intentionally left untouched on failure.
     } finally {
@@ -118,11 +140,14 @@ function Services() {
     }
   }
 
+  const loadErrorMessage =
+    loadError && (loadError instanceof ApiError ? errorMessageFor(t, loadError) : t('services.errors.network'))
+
   return (
     <AdminLayout>
       <div className="admin-content">
         <section className="admin-card">
-          <h2>{editingId ? 'Editar serviço' : 'Novo serviço'}</h2>
+          <h2>{editingId ? t('services.editTitle') : t('services.newTitle')}</h2>
 
           {formError && (
             <p className="admin-form-error" role="alert">
@@ -138,7 +163,7 @@ function Services() {
           <form onSubmit={handleSubmit} noValidate>
             <div className="admin-form-grid">
               <div className="admin-field admin-field--full">
-                <label htmlFor={nameId}>Nome</label>
+                <label htmlFor={nameId}>{t('common.fields.name')}</label>
                 <input
                   id={nameId}
                   value={form.name}
@@ -155,7 +180,7 @@ function Services() {
               </div>
 
               <div className="admin-field admin-field--full">
-                <label htmlFor={descriptionId}>Descrição (opcional)</label>
+                <label htmlFor={descriptionId}>{t('common.fields.descriptionOptional')}</label>
                 <textarea
                   id={descriptionId}
                   value={form.description}
@@ -171,7 +196,7 @@ function Services() {
               </div>
 
               <div className="admin-field">
-                <label htmlFor={durationId}>Duração (minutos)</label>
+                <label htmlFor={durationId}>{t('services.durationLabel')}</label>
                 <input
                   id={durationId}
                   type="number"
@@ -191,11 +216,11 @@ function Services() {
               </div>
 
               <div className="admin-field">
-                <label htmlFor={priceId}>Preço (R$)</label>
+                <label htmlFor={priceId}>{t('services.priceLabel')}</label>
                 <input
                   id={priceId}
                   inputMode="decimal"
-                  placeholder="0,00"
+                  placeholder={t('services.pricePlaceholder')}
                   value={form.price}
                   onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
                   aria-invalid={Boolean(fieldErrors.price)}
@@ -216,17 +241,17 @@ function Services() {
                   checked={form.is_active}
                   onChange={(event) => setForm((prev) => ({ ...prev, is_active: event.target.checked }))}
                 />
-                <label htmlFor={activeId}>Ativo</label>
+                <label htmlFor={activeId}>{t('common.fields.statusActive')}</label>
               </div>
             </div>
 
             <div className="admin-form-actions">
               <button type="submit" className="admin-button" disabled={submitting}>
-                {submitting ? 'Salvando...' : editingId ? 'Salvar' : 'Criar'}
+                {submitting ? t('common.actions.saving') : editingId ? t('common.actions.save') : t('common.actions.create')}
               </button>
               {editingId && (
                 <button type="button" className="admin-button admin-button--secondary" onClick={startCreate}>
-                  Cancelar
+                  {t('common.actions.cancel')}
                 </button>
               )}
             </div>
@@ -234,50 +259,54 @@ function Services() {
         </section>
 
         <section className="admin-card">
-          <h2>Serviços cadastrados</h2>
+          <h2>{t('services.listTitle')}</h2>
 
-          {services === null && !loadError && <p>Carregando...</p>}
+          {services === null && !loadError && <p>{t('common.actions.loading')}</p>}
 
           {loadError && (
             <div role="alert">
-              <p className="admin-form-error">{loadError}</p>
+              <p className="admin-form-error">{loadErrorMessage}</p>
               <button type="button" className="admin-button" onClick={loadServices}>
-                Tentar novamente
+                {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {services !== null && services.length === 0 && <p>Nenhum serviço cadastrado ainda.</p>}
+          {services !== null && services.length === 0 && <p>{t('services.emptyState')}</p>}
 
           {services !== null && services.length > 0 && (
             <div className="admin-table-wrapper">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th scope="col">Nome</th>
-                    <th scope="col">Duração</th>
-                    <th scope="col">Preço</th>
-                    <th scope="col">Status</th>
+                    <th scope="col">{t('common.fields.name')}</th>
+                    <th scope="col">{t('services.tableDuration')}</th>
+                    <th scope="col">{t('services.tablePrice')}</th>
+                    <th scope="col">{t('common.fields.status')}</th>
                     <th scope="col">
-                      <span className="sr-only">Ações</span>
+                      <span className="sr-only">{t('common.actions.actionsColumn')}</span>
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {services.map((service) => (
                     <tr key={service.id}>
-                      <td data-label="Nome">{service.name}</td>
-                      <td data-label="Duração">{service.duration_minutes} min</td>
-                      <td data-label="Preço">R$ {toBRLInput(service.price)}</td>
-                      <td data-label="Status">
+                      <td data-label={t('common.fields.name')}>{service.name}</td>
+                      <td data-label={t('services.tableDuration')}>
+                        {t('services.durationUnit', { count: service.duration_minutes })}
+                      </td>
+                      <td data-label={t('services.tablePrice')}>
+                        {t('services.price', { price: toMoneyInput(service.price, i18n.language) })}
+                      </td>
+                      <td data-label={t('common.fields.status')}>
                         <span className="admin-status" data-active={service.is_active}>
                           <span className="admin-status-dot" aria-hidden="true" />
-                          {service.is_active ? 'Ativo' : 'Inativo'}
+                          {service.is_active ? t('common.fields.statusActive') : t('common.fields.statusInactive')}
                         </span>
                       </td>
-                      <td data-label="Ações">
+                      <td data-label={t('common.actions.actionsColumn')}>
                         <button type="button" className="admin-button admin-button--secondary" onClick={() => startEdit(service)}>
-                          Editar
+                          {t('common.actions.edit')}
                         </button>
                       </td>
                     </tr>
