@@ -348,11 +348,27 @@ Depois de criada, a reserva pública recebe um e-mail de confirmação com um li
 4. A varredura `php artisan appointments:send-pending-confirmations` reenvia o que ficou `pending` ou `failed`. Ela está agendada a cada minuto em `routes/console.php`.
    - Só pega notificações sem atualização há 2 minutos, para não disputar com o envio da própria requisição.
    - Tenta no máximo 5 vezes.
-   - Precisa do scheduler rodando (`docker compose exec backend php artisan schedule:work`), que **não sobe sozinho** no compose atual.
+   - Roda no serviço `scheduler` do Compose, que sobe junto com `docker compose up -d --build` (ver "Scheduler").
 5. Duas entregas da mesma notificação nunca enviam duas vezes: cada uma reivindica a linha com um `UPDATE` condicional em `attempts`, e só a que mudou a linha envia. Um provedor externo ainda pode entregar em dobro após um timeout, o que o planejamento aceita.
 6. **Retry da criação** com o mesmo `Idempotency-Key` devolve a reserva existente (`200`) e **não** envia outro e-mail; a resposta mostra o status atual da notificação.
 
 O envio é **síncrono** na requisição, depois do commit, e não por fila. O projeto não tem worker de fila no compose, e um job na fila nunca seria executado. A varredura cobre o caso de a requisição morrer entre o commit e o envio.
+
+O SMTP tem **timeout de 5 s** (`MAIL_TIMEOUT`, padrão 5, em `config/mail.php`). Antes ele não tinha limite próprio e herdava o `default_socket_timeout` do PHP (60 s). Com um provedor lento, a requisição de reserva ficava presa e o proxy respondia `504` ao cliente, **embora a reserva já estivesse gravada e confirmada**. Reproduzido nesta entrega com o Mailpit pausado: 60 s e `504` antes da correção; `201` em 8 s com `notification_status: "failed"` depois dela, e o e-mail recuperado pela varredura.
+
+### Garantia real de entrega do e-mail
+
+A entrega é **pelo menos uma vez, com tentativas limitadas**, e não "exatamente uma vez". O que cada caso garante:
+
+| Situação | O que acontece | Garantia |
+|---|---|---|
+| Replay idempotente da criação (mesma `Idempotency-Key`) | Devolve a reserva existente; nenhuma notificação nova, nenhum envio | Nenhum e-mail a mais (testado) |
+| Duas tentativas de envio concorrentes da mesma notificação (requisição × varredura, ou duas varreduras) | Cada uma faz um `UPDATE` condicional em `attempts`; só a que muda a linha envia. A varredura só pega linhas sem atualização há 2 min, e o SMTP tem timeout de 5 s, então a requisição já terminou quando a varredura as vê | Um envio só (testado) |
+| O SMTP aceitou a mensagem, mas o processo morreu antes de gravar `sent` | A notificação fica `pending` ou `failed` com a tentativa contada; a varredura reenvia depois de 2 min | **Pode duplicar.** Risco residual aceito no MVP (seção 6 do planejamento: "entrega externa pode se repetir"). Evitá-lo exigiria um protocolo com o provedor (por exemplo, chave de idempotência no envio), desproporcional agora |
+| Falha de SMTP | Reserva intacta; `failed` com só a classe do erro; a varredura tenta até 5 vezes | Recuperação automática enquanto houver tentativas; depois disso, o status fica `failed` sem alerta |
+| Reserva cancelada ou já iniciada antes do envio | `skipped`, nada é enviado | Nenhuma confirmação obsoleta (testado). A checagem é imediatamente antes do envio, então um cancelamento no mesmo instante ainda pode deixar sair o e-mail |
+
+**Nenhum envio segura lock ou transação.** O envio da requisição acontece depois do commit (`DB::afterCommit`), e a varredura não abre transação. `ConfirmationAfterCommitTest` confere, nos dois caminhos e no instante do envio, que não há transação aberta e que outra conexão consegue `SELECT ... FOR UPDATE NOWAIT` em `business_settings`: o SMTP nunca trava a agenda da barbearia.
 
 ### O e-mail
 
@@ -384,6 +400,24 @@ O envio é **síncrono** na requisição, depois do commit, e não por fila. O p
 1. Cadastre expediente para um profissional ativo vinculado a um serviço ativo.
 2. Faça o POST de criação (ver "Criação pública de reservas"): `notification_status` deve vir `sent` e o e-mail deve aparecer em http://localhost:8025.
 3. Abra o botão "Cancelar reserva" do e-mail e confirme. A página deve mostrar "Reserva cancelada", e o horário deve voltar em `GET /api/v1/public/availability`.
+
+## Scheduler
+
+O serviço `scheduler` do `docker-compose.yml` roda `php artisan schedule:work` com a mesma imagem, o mesmo código montado e o mesmo ambiente do `backend`, compartilhados por uma âncora YAML. Ele sobe com `docker compose up -d --build`, depois de `mysql`, `mailpit` e `backend` saudáveis.
+
+- **Um só:** o `container_name` fixo faz o Compose reaproveitar o mesmo container em todo `up` e `restart`, e recusar `--scale` (verificado: depois de `up`, `restart` e `--scale scheduler=2`, continua um container com um único processo `php artisan schedule:work`).
+- **Tarefa sem sobreposição:** `appointments:send-pending-confirmations` roda a cada minuto, com `withoutOverlapping(10)` e `onOneServer()` (`routes/console.php`). A trava fica no cache (`CACHE_STORE=database`, tabela `cache_locks`).
+  - **Defeito corrigido:** o padrão do Laravel mantém a trava de sobreposição por 1440 minutos, e ela só é liberada ao fim da execução ou por sinal. A imagem do backend **não tem `pcntl`**, então nenhum sinal a libera: um `docker compose stop`/`restart` (ou queda) no meio de uma varredura bloquearia a recuperação de e-mails por até 24 horas. Agora a trava expira em 10 minutos (`ScheduleTest`). Se uma varredura com SMTP travado passar disso e a seguinte se sobrepuser, ainda não há envio duplicado, por causa da reivindicação por `UPDATE`.
+- **PID 1 é o `tini`** (`init: true`), que repassa o `SIGTERM`. O healthcheck usa `pgrep -f '^php artisan schedule:work'`, ancorado para não casar com o próprio `tini`.
+- **Comandos:**
+  - `docker compose ps scheduler`
+  - `docker compose logs -f scheduler`, que mostra `Running ['artisan' appointments:send-pending-confirmations] ... DONE` a cada minuto
+  - `docker compose exec scheduler php artisan schedule:list`
+- **Verificado nesta entrega com dados identificados:**
+  1. Com o Mailpit **pausado** (`docker compose pause mailpit`, que preserva as mensagens existentes), uma reserva para `scheduler-check-<timestamp>@example.com` respondeu `201` em 8 s, com `notification_status: "failed"`.
+  2. O Mailpit foi retomado. A primeira varredura depois da folga de 2 minutos enviou o e-mail: tentativa 2, `sent`, exatamente 1 mensagem para o identificador.
+  3. Depois só essas reservas (#3 e #4), suas notificações e suas mensagens no Mailpit foram removidas, por ID. Os dados de negócio do banco de desenvolvimento voltaram ao mesmo checksum da linha de base.
+- **Não há worker de fila nem Redis:** a fila continua `database` e sem consumidor, e nada do projeto depende dela.
 
 ## Importação de dados de teste fictícios
 
@@ -429,16 +463,39 @@ Backend (PHPUnit, dentro do container, usando o MySQL real do Compose):
 docker compose exec backend php artisan test
 ```
 
-### Isolamento entre banco de desenvolvimento e banco de testes
+### Ambiente de testes (isolamento do desenvolvimento)
 
-Dentro do Compose, as variáveis de ambiente do backend (`backend/.env`) são injetadas pelo Docker diretamente como variáveis de ambiente do container (mecanismo `env_file`). Isso faz com que uma diretiva `<env>` do `phpunit.xml` sem `force="true"` seja silenciosamente ignorada — o valor do container sempre prevalece. Foi exatamente isso que fazia os testes rodarem contra o banco `barber_booking` (de desenvolvimento) em vez de um banco isolado.
+**Configuração final:** o `backend/phpunit.xml` define as variáveis da suíte com `<server>`, e não com `<env force="true">`:
+- `APP_ENV=testing`;
+- `DB_CONNECTION=mysql`, com `DB_DATABASE` e `DB_TEST_DATABASE` iguais a `barber_booking_test`;
+- `MAIL_MAILER=array`, `CACHE_STORE=array`, `QUEUE_CONNECTION=sync`, `BROADCAST_CONNECTION=null` e `SESSION_DRIVER=database`;
+- limites de login 2 e 3, e `BCRYPT_ROUNDS=4`.
 
-A correção:
+`tests/Feature/TestEnvironmentTest.php` confere o resultado **dentro do processo de testes**, para uma regressão falhar na hora.
 
-- `phpunit.xml` força (`force="true"`) a variável `DB_TEST_DATABASE=barber_booking_test`, que **sempre** vence, mesmo com `DB_DATABASE` já definido no ambiente do container.
-- `backend/config/database.php` faz a conexão `mysql` usar `env('DB_TEST_DATABASE', env('DB_DATABASE', 'laravel'))` — ou seja, fora de um test run, nada muda; durante o PHPUnit, o banco é sempre `barber_booking_test`.
+**Causa da divergência (investigada nesta entrega):**
+- **Como o Laravel lê:** primeiro de `$_SERVER` (`Illuminate\Support\Env`: `ServerConstAdapter`, depois `EnvConstAdapter`). O PHP preenche `$_SERVER` com o ambiente real do processo.
+- **De onde vêm os valores no Docker:** do `env_file` do Compose (`backend/.env`: `APP_ENV=local`, `MAIL_MAILER=smtp`, `CACHE_STORE=database`, ...).
+- **O que o `force` faz:** no PHPUnit 12, o `<env force="true">` só escreve em `putenv`/`$_ENV`. Ele **nunca** venceu uma variável que o container já tinha.
+- **Por que o banco sempre ficou isolado:** `DB_TEST_DATABASE` **não existe** no container, então o valor forçado não tinha concorrente.
 
-Verificado nesta correção: rodar a suíte completa não altera nenhuma linha do banco `barber_booking` (contagem de linhas comparada antes/depois via `information_schema`).
+Não foi uma regressão. O `phpunit.xml` e o `docker-compose.yml` não mudaram desde os PRs #2 e #1, as versões de `laravel/framework` (v13.34.0), `phpunit/phpunit` (12.5.38) e `vlucas/phpdotenv` (v5.7.0) são as mesmas e não há cache de configuração (`bootstrap/cache/config.php` não existe). O comentário do PR #2 dizia que o `force` tornava o `APP_ENV=testing` consistente "em todo lugar", mas isso nunca tinha sido verificado dentro do processo.
+
+Evidência: uma sonda temporária dentro da suíte, no Docker, mostrou 11 variáveis com `$_SERVER` vencendo. Entre elas `APP_ENV` (local), `MAIL_MAILER` (smtp), `CACHE_STORE` (database), `QUEUE_CONNECTION` (database), `BCRYPT_ROUNDS` (12) e os limites de login (5 e 20). O resultado era o mesmo com `php artisan test` e com `vendor/bin/phpunit`.
+
+Consequências antes da correção, todas no Docker e não na CI:
+- a suíte rodava como `local` (`runningUnitTests()` falso);
+- um teste que não simulasse o mail enviaria mensagens de verdade ao Mailpit;
+- o Laravel Boost injetava seu script nas páginas HTML;
+- os testes de throttle usavam os limites de desenvolvimento, o que explica as 20 assertions a mais em relação à CI.
+
+**Verificado depois da correção:**
+- `TestEnvironmentTest` passa com `vendor/bin/phpunit` e com `php artisan test`, e falha (3 de 4) com o `phpunit.xml` antigo.
+- A suíte no Docker agora faz exatamente as mesmas assertions da CI.
+- Suíte completa no Docker: as 17 tabelas do banco `barber_booking` ficaram com o mesmo `CHECKSUM TABLE` antes e depois, e o Mailpit ficou com a mesma contagem (2), ou seja, nenhuma mensagem da suíte.
+- O teste de CSRF (`AuthTest`) continua reativando o middleware explicitamente (`app()->instance('env', 'production')`). Sem essa linha, a requisição sem token passa e o teste falha, o que prova que ele depende do middleware ativo. O cancelamento ganhou um teste equivalente.
+
+Os testes de concorrência e de pós-commit sobem processos e conexões próprios. Eles passam explicitamente ao processo filho as variáveis do banco de testes e drivers sem efeito colateral, porque o processo filho não lê o `phpunit.xml`.
 
 ### Isolamento de conexão com o MySQL
 
@@ -580,6 +637,17 @@ Resultado: **155 passed** no backend (111 anteriores + 44 novos). O teste de con
 
 Resultado: **183 passed** no backend (155 anteriores + 28 novos), também com o ambiente limpo, como na CI (`APP_ENV=testing`).
 
+### Testes do ambiente, do scheduler e da entrega
+
+- `TestEnvironmentTest` (4): `APP_ENV=testing`, MySQL em `barber_booking_test`, mail, cache e fila em memória, e os limites de teste ativos.
+- `ScheduleTest` (2): a varredura agendada a cada minuto com `withoutOverlapping(10)` e `onOneServer`; uma trava deixada por uma execução morta expira em minutos, não em um dia.
+- `ConfirmationAfterCommitTest` (+1): na varredura, assim como na requisição, o envio acontece sem transação aberta e sem o lock da agenda.
+- `BookingConfirmationTest` (+1): um servidor SMTP que aceita a conexão e nunca responde não segura a requisição de reserva (`201`, `failed`, em segundos).
+- `PublicCancellationTest` (+1): o formulário de cancelamento recusa o POST sem token CSRF (`419`, página própria) e aceita com token válido, com o middleware reativado.
+- `AuthTest`: o teste de CSRF agora também exige `error.code: SESSION_EXPIRED`. **Defeito corrigido:** o Laravel converte `TokenMismatchException` em `HttpException(419)` antes de chamar os renderizadores registrados, então o renderizador do contrato (`SESSION_EXPIRED`) nunca era executado. A API respondia o JSON padrão do framework e, com `APP_DEBUG=true`, o stack trace. Os renderizadores de CSRF (API e página de cancelamento) agora tratam o `HttpException(419)` cuja causa é `TokenMismatchException`.
+
+Resultado desta entrega: **192 passed** no backend.
+
 ## Internacionalização (PT-BR / English)
 
 Requisito registrado em `docs/planejamento-barbearia-mvp.md`, seção 15. Aqui ficam as decisões de implementação.
@@ -690,15 +758,11 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 ## Limitações desta etapa
 
 - Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade**, a **criação pública de reservas** (com proteção contra double booking na transação), o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado** estão implementados. Catálogo público, telas de agendamento, reserva e cancelamento pelo admin e reenvio manual de e-mail ainda não existem.
-- **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, e telas públicas de agendamento. O scheduler, necessário para a varredura de e-mails pendentes, não sobe sozinho no compose.
+- **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, telas públicas de agendamento, e alerta para confirmações que esgotaram as 5 tentativas.
 - O motor e a criação de reservas ainda não têm tela no React; só o cancelamento tem página, e ela é Laravel, como o planejamento prevê.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
-- **Diferença de 20 assertions entre Docker e CI (investigada):** o Laravel lê variáveis de ambiente primeiro de `$_SERVER` e depois de `$_ENV` (`Illuminate\Support\Env`), e o `<env force="true">` do PHPUnit só escreve em `putenv`/`$_ENV`. No Docker, o `env_file` do compose transforma `ADMIN_LOGIN_THROTTLE_PER_EMAIL=5` e `PER_IP=20` do `.env` em variáveis de ambiente reais, que vencem os valores forçados do `phpunit.xml` (2 e 3). Os dois testes de throttle do login repetem tentativas até o limite e fazem 20 assertions a mais no Docker. Reproduzido: rodando `phpunit` no mesmo container com ambiente limpo (`env -i`, só as variáveis de banco), a suíte dá exatamente as assertions da CI, e o JUnit aponta só `AuthTest::test_login_throttles_by_ip_and_normalized_email` (13 contra 10) e `test_login_throttles_by_ip_alone_across_different_emails` (28 contra 11). Os testes passam nos dois ambientes, mas localmente exercitam limites diferentes da CI. Correção possível, pendente e fora deste escopo: usar `<server>` em vez de `<env>` no `phpunit.xml` para essas variáveis, ou tirá-las do `env_file` do container.
-- **Ambiente dos testes no Docker (pendência separada, ampliada nesta entrega):** além da diferença de 20 assertions acima, a mesma causa faz a suíte no Docker rodar com **`APP_ENV=local`**, e não `testing`, além de `MAIL_MAILER=smtp`. O `env_file` do compose coloca `APP_ENV=local` e `MAIL_MAILER=smtp` em `$_SERVER`, que vence o `<env force>` do `phpunit.xml`.
-  - Verificado com um teste temporário que imprimiu, no Docker, `env=local runningUnitTests=false mail=smtp`, e com ambiente limpo, `env=testing runningUnitTests=true mail=array`.
-  - Consequências: localmente, um teste que não simule o mail envia e-mail **de verdade** para o Mailpit (por isso os testes desta entrega usam `Mail::fake()` ou configuram o transporte explicitamente); o Laravel Boost injeta seu script nas páginas HTML; e o bypass de CSRF de testes não se aplica.
-  - A CI roda com `testing`. Correção sugerida, fora deste escopo: usar `<server>` em vez de `<env>` no `phpunit.xml` para essas variáveis, ou não passá-las pelo `env_file` ao rodar testes.
+- **Resolvido:** a diferença de 20 assertions entre Docker e CI e a suíte rodando como `local` no Docker. Causa e correção em "Ambiente de testes".
 - Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas de uma entrega anterior) ainda **não** foram confirmados visualmente em navegador. A internacionalização (PT-BR/English, esta entrega) foi verificada via `curl` contra o proxy real com `Accept-Language: pt-BR`/`en` (mensagens de erro/validação traduzidas corretamente) e via teste de integração automatizado (`App.test.jsx`, troca de idioma pelo router real nas três áreas), mas a troca de idioma pelo botão **não** foi confirmada visualmente em navegador. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual abaixo.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.
