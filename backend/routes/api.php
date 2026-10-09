@@ -6,10 +6,17 @@ use App\Http\Controllers\Admin\ProfessionalController;
 use App\Http\Controllers\Admin\ScheduleBlockController;
 use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\WorkingHourController;
+use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\HealthController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class);
+
+Route::prefix('v1/public')->name('public.')->group(function () {
+    Route::get('/availability', [AvailabilityController::class, 'forPublic'])
+        ->middleware('throttle:public-availability')
+        ->name('availability');
+});
 
 Route::prefix('v1/admin')->name('admin.')->group(function () {
     Route::post('/login', [AuthController::class, 'login'])
@@ -41,5 +48,7 @@ Route::prefix('v1/admin')->name('admin.')->group(function () {
             ->name('schedule-blocks.destroy');
 
         Route::get('/business-settings', [BusinessSettingsController::class, 'show'])->name('business-settings.show');
+
+        Route::get('/availability', [AvailabilityController::class, 'forAdmin'])->name('availability');
     });
 });

@@ -23,4 +23,7 @@ return [
     'period_end_before_start' => 'The end must be after the start.',
     'periods_overlap' => 'Periods on the same day cannot overlap.',
     'service_unavailable' => 'Service unavailable right now.',
+    'availability_service_unavailable' => 'Service unavailable for booking.',
+    'availability_professional_unavailable' => 'Professional unavailable for booking.',
+    'availability_service_not_offered' => 'This professional does not offer the selected service.',
 ];

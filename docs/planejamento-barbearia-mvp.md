@@ -446,3 +446,47 @@ Requisito desta entrega: toda a interface (área pública, login e painel admini
 - A API continua recebendo e retornando `price` como string decimal (seção 13) independentemente do idioma da interface — só a convenção de digitação/exibição no frontend muda (vírgula ou ponto decimal), nunca o valor transportado.
 - A conversão local↔UTC de bloqueios (seção 14) e a regra de "dia inteiro" (meia-noite à meia-noite seguinte, no fuso da barbearia, fim exclusivo) não mudam com o idioma — só a formatação de exibição.
 - O backend aceita o idioma só via header `Accept-Language` **por requisição** (sem sessão/estado global de idioma no servidor); `pt_BR` e `en` são suportados, com `pt_BR` como fallback para header ausente ou idioma não suportado. `error.code` (o contrato que o frontend usa para decidir o que fazer) nunca muda com o idioma — só `error.message` e as mensagens de validação por campo são traduzidas.
+
+## 16. Contratos implementados — Disponibilidade
+
+Duas rotas, o mesmo motor (`app/Services/Availability/AvailabilityEngine.php`). O contexto vem da rota, nunca de parâmetro.
+
+| Método / endpoint | Autenticação | Contexto |
+| --- | --- | --- |
+| `GET /api/v1/public/availability` | nenhuma; 60 req/min por IP | público |
+| `GET /api/v1/admin/availability` | sessão admin (`auth:sanctum`) | admin |
+
+Query (as duas): `service_id` (inteiro), `professional_id` (inteiro), `date` (`YYYY-MM-DD`, data real, interpretada no fuso da barbearia).
+
+`200`:
+
+```json
+{
+  "data": {
+    "timezone": "America/Sao_Paulo",
+    "date": "2026-11-03",
+    "slots": [
+      { "starts_at": "2026-11-03T12:00:00+00:00", "ends_at": "2026-11-03T12:45:00+00:00" }
+    ]
+  }
+}
+```
+
+Data no passado ou fora do horizonte: `200` com `slots: []`.
+
+`422 VALIDATION_ERROR`, com `fields`:
+- `date` com formato inválido ou data inexistente;
+- `service_id` ausente, inexistente ou inativo ("Serviço indisponível para agendamento.");
+- `professional_id` ausente, inexistente ou inativo ("Profissional indisponível para agendamento."), ou que não realiza o serviço ("Este profissional não realiza o serviço escolhido.").
+
+`401 UNAUTHENTICATED` na rota admin sem sessão; `429 RATE_LIMITED` na rota pública acima do limite.
+
+Regras: as da seção 5, com as decisões desta entrega:
+- **Horizonte nos dois contextos:** `booking_horizon_days` conta datas incluindo hoje (30 → hoje até hoje+29), pela data local da barbearia.
+- **Antecedência:** só no público, inclusiva no limite exato. O admin ignora `min_notice_minutes`, mas nunca recebe início no passado.
+- **Grade:** quartos fixos do relógio local (`:00`, `:15`, `:30`, `:45`); o início de cada período é arredondado para o próximo quarto.
+- **Intervalos `[início, fim)`:** atendimento adjacente permitido; reserva `cancelled` não ocupa horário.
+
+Diferenças em relação à seção 11: a resposta vem dentro de `data`, como nos demais endpoints já implementados, e foi adicionada a rota admin, que a seção 11 não listava.
+
+A consulta é uma sugestão sem lock. A garantia contra reservas simultâneas depende da revalidação transacional na criação da reserva, ainda não implementada.
