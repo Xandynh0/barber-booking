@@ -1,0 +1,471 @@
+/* Public pages (homepage and booking journey) — same "old barber" palette as
+   the rest of the app (index.css): cream, maroon, brass, black, Georgia.
+   Mobile first: steps and summary stack; from 860px the booking summary
+   sits beside the main column. */
+
+/* Homepage. */
+
+.home-page {
+  justify-content: flex-start;
+  padding-top: 4rem;
+}
+
+.home-section {
+  width: 100%;
+  max-width: 40rem;
+  margin-top: 1rem;
+  text-align: left;
+}
+
+.home-section-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.2rem;
+  color: var(--color-maroon-dark);
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.home-services {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.home-service {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 1rem;
+  padding: 0.85rem 1rem;
+  background: #fffaf0;
+  border: 1px solid var(--color-cream-dark);
+  border-left: 4px solid var(--color-brass);
+  border-radius: 4px;
+}
+
+.home-service-main {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.home-service-name {
+  font-weight: bold;
+}
+
+.home-service-description {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
+.home-service-meta {
+  display: grid;
+  justify-items: end;
+  font-size: 0.9rem;
+}
+
+.home-service-price {
+  font-weight: bold;
+  color: var(--color-maroon-dark);
+}
+
+.home-service-link {
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: var(--color-maroon);
+}
+
+.home-contact {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0 auto;
+  width: fit-content;
+}
+
+.home-contact dt {
+  font-weight: bold;
+}
+
+.home-contact dd {
+  margin: 0;
+}
+
+.home-page .footnote a {
+  color: inherit;
+}
+
+/* Booking journey. */
+
+.booking-page {
+  min-height: 100vh;
+  padding: 0 1rem 3rem;
+}
+
+.booking-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin: 0 -1rem 1.5rem;
+  padding: 0.85rem 1rem;
+  background: var(--color-black);
+  color: var(--color-cream);
+  border-bottom: 4px solid var(--color-brass);
+}
+
+.booking-brand {
+  color: var(--color-cream);
+  font-size: 1.15rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.booking-header-meta {
+  flex: 1;
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+.booking-header .language-switcher {
+  margin-left: auto;
+}
+
+.booking-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 auto 1.5rem;
+  max-width: 64rem;
+  font-size: 0.9rem;
+}
+
+.booking-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  opacity: 0.6;
+}
+
+.booking-step[data-done],
+.booking-step[aria-current='step'] {
+  opacity: 1;
+}
+
+.booking-step[aria-current='step'] {
+  font-weight: bold;
+  color: var(--color-maroon-dark);
+}
+
+.booking-step-number {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border-radius: 50%;
+  border: 1px solid var(--color-brass);
+  background: var(--color-cream-dark);
+}
+
+.booking-step[aria-current='step'] .booking-step-number {
+  background: var(--color-maroon);
+  border-color: var(--color-maroon);
+  color: var(--color-cream);
+}
+
+.booking-layout {
+  display: grid;
+  gap: 1.5rem;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+@media (min-width: 860px) {
+  .booking-layout {
+    grid-template-columns: minmax(0, 1fr) 18rem;
+    align-items: start;
+  }
+
+  .booking-summary {
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+.booking-main,
+.booking-summary,
+.booking-done {
+  background: #fffaf0;
+  border: 1px solid var(--color-cream-dark);
+  border-top: 4px solid var(--color-maroon);
+  border-radius: 4px;
+  padding: 1.25rem;
+}
+
+.booking-done {
+  max-width: 36rem;
+  margin: 0 auto;
+}
+
+.booking-step-of {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.65;
+}
+
+.booking-heading {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  color: var(--color-maroon-dark);
+}
+
+.booking-heading:focus {
+  outline: none;
+}
+
+.booking-heading:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 4px;
+}
+
+.booking-subheading {
+  margin: 1.25rem 0 0.6rem;
+  font-size: 1.05rem;
+  color: var(--color-maroon-dark);
+}
+
+.booking-hint {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+
+/* Choice cards (services, professionals) and chips (dates, times). */
+
+.option-list,
+.date-list,
+.slot-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.option-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.option-card {
+  display: grid;
+  gap: 0.2rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: var(--color-cream);
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.option-card[aria-pressed='true'] {
+  background: var(--color-maroon);
+  border-color: var(--color-maroon-dark);
+  color: var(--color-cream);
+}
+
+.option-title {
+  font-weight: bold;
+}
+
+.option-description,
+.option-meta {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.date-list,
+.slot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.date-chip,
+.slot-chip {
+  min-width: 4.5rem;
+  min-height: 2.5rem;
+  padding: 0.4rem 0.65rem;
+  font: inherit;
+  font-size: 0.9rem;
+  color: inherit;
+  background: var(--color-cream);
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.date-chip[aria-pressed='true'],
+.slot-chip[aria-pressed='true'] {
+  background: var(--color-maroon);
+  border-color: var(--color-maroon-dark);
+  color: var(--color-cream);
+}
+
+/* Form. */
+
+.booking-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.booking-field {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.booking-field label {
+  font-weight: bold;
+}
+
+.booking-field input {
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+  border: 1px solid var(--color-brass);
+  border-radius: 4px;
+  background: #fff;
+}
+
+.booking-field input[aria-invalid='true'] {
+  border-color: var(--color-maroon);
+  border-width: 2px;
+}
+
+.field-error {
+  color: var(--color-maroon);
+  font-size: 0.9rem;
+}
+
+/* Summary. */
+
+.summary-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.4rem 0.9rem;
+  margin: 0;
+}
+
+.summary-list dt {
+  font-weight: bold;
+}
+
+.summary-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.summary-pending {
+  font-style: italic;
+  opacity: 0.6;
+}
+
+.summary-reference {
+  font-family: 'Courier New', monospace;
+}
+
+/* Actions and notices. */
+
+.booking-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.primary-button,
+.secondary-button,
+.cta-button {
+  display: inline-block;
+  padding: 0.75rem 1.25rem;
+  font: inherit;
+  font-size: 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: center;
+}
+
+.primary-button,
+.cta-button {
+  background: var(--color-maroon);
+  color: var(--color-cream);
+  border: 1px solid var(--color-maroon-dark);
+}
+
+.primary-button:hover:not(:disabled),
+.cta-button:hover {
+  background: var(--color-maroon-dark);
+}
+
+.secondary-button {
+  background: transparent;
+  color: var(--color-maroon-dark);
+  border: 1px solid var(--color-brass);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.option-card:focus-visible,
+.date-chip:focus-visible,
+.slot-chip:focus-visible,
+.primary-button:focus-visible,
+.secondary-button:focus-visible,
+.cta-button:focus-visible,
+.booking-field input:focus-visible,
+.booking-brand:focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.public-notice {
+  margin: 0 0 1rem;
+  padding: 0.75rem 1rem;
+  border-left: 4px solid var(--color-brass);
+  background: var(--color-cream);
+}
+
+.public-notice p {
+  margin: 0 0 0.5rem;
+}
+
+.public-notice p:last-child {
+  margin-bottom: 0;
+}
+
+.public-notice--error {
+  border-left-color: var(--color-maroon);
+}
+
+.public-notice--info {
+  border-left-color: var(--color-black);
+}
+
+@media (max-width: 480px) {
+  .booking-actions {
+    flex-direction: column-reverse;
+  }
+
+  .booking-actions > * {
+    width: 100%;
+  }
+}

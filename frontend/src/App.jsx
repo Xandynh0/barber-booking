@@ -7,6 +7,7 @@ import Professionals from './pages/admin/Professionals'
 import ScheduleBlocks from './pages/admin/ScheduleBlocks'
 import Services from './pages/admin/Services'
 import WorkingHours from './pages/admin/WorkingHours'
+import Booking from './pages/booking/Booking'
 import Home from './pages/Home'
 
 function AdminArea() {
@@ -64,6 +65,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/agendar" element={<Booking />} />
         <Route path="/admin/*" element={<AdminArea />} />
       </Routes>
     </BrowserRouter>

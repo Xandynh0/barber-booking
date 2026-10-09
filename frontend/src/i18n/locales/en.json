@@ -47,13 +47,16 @@
   },
   "home": {
     "tagline": "Tradition in style. Simplicity in scheduling.",
-    "apiStatusLabel": "API status",
-    "statusChecking": "Checking...",
-    "statusOnline": "Connected",
-    "statusOffline": "Unavailable",
-    "statusDetailOnline": "API and database responding ({{status}}).",
-    "statusDetailOffline": "Could not connect to the API right now.",
-    "footnote": "Technical foundation under construction — no real bookings at this stage."
+    "bookCta": "Book an appointment",
+    "servicesTitle": "Services",
+    "servicesLoading": "Loading services…",
+    "servicesEmpty": "No services are available for booking right now.",
+    "servicesError": "Could not load the services.",
+    "bookThis": "Book this service",
+    "contactTitle": "Find us",
+    "address": "Address",
+    "phone": "Phone",
+    "adminLink": "Administrator area"
   },
   "auth": {
     "subtitle": "Administrative access",
@@ -175,5 +178,93 @@
     },
     "professionalLabel": "Professional",
     "noProfessionalsYet": "No professionals registered yet — register one under \"Professionals\" first."
+  },
+  "booking": {
+    "title": "Book an appointment",
+    "backHome": "Back to home",
+    "stepsLabel": "Booking steps",
+    "steps": {
+      "service": "Service",
+      "professional": "Professional",
+      "datetime": "Time",
+      "customer": "Your details",
+      "review": "Review"
+    },
+    "stepOf": "Step {{current}} of {{total}}",
+    "summary": {
+      "title": "Summary",
+      "toChoose": "To be chosen",
+      "service": "Service",
+      "duration": "Duration",
+      "professional": "Professional",
+      "date": "Date",
+      "time": "Time",
+      "price": "Price"
+    },
+    "durationMinutes": "{{count}} min",
+    "actions": {
+      "back": "Back",
+      "continue": "Continue",
+      "confirm": "Confirm booking",
+      "confirming": "Confirming…",
+      "retry": "Try again",
+      "tryConfirmAgain": "Try confirming again",
+      "newBooking": "Make another booking"
+    },
+    "service": {
+      "heading": "Choose the service",
+      "loading": "Loading services…",
+      "empty": "No services are available for booking right now.",
+      "error": "Could not load the services."
+    },
+    "professional": {
+      "heading": "Choose the professional",
+      "loading": "Loading professionals…",
+      "empty": "No professional is available for this service right now. Choose another service.",
+      "error": "Could not load the professionals."
+    },
+    "datetime": {
+      "heading": "Choose the day and time",
+      "datesLabel": "Day",
+      "slotsLabel": "Available times on {{date}}",
+      "timezoneNote": "Times in the barbershop's timezone ({{timezone}}).",
+      "loading": "Loading times…",
+      "empty": "No times available on this day. Choose another day.",
+      "error": "Could not load the times.",
+      "pickDate": "Choose a day to see the times."
+    },
+    "customer": {
+      "heading": "Your details",
+      "intro": "We use these details only for this booking and to send the confirmation.",
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone with area code",
+      "phoneHint": "E.g. (11) 99999-9999",
+      "required": "Fill in this field."
+    },
+    "review": {
+      "heading": "Review and confirm",
+      "customerTitle": "Your details",
+      "note": "When you confirm, the booking is registered immediately."
+    },
+    "done": {
+      "heading": "Booking confirmed",
+      "intro": "Your time slot is booked.",
+      "reference": "Booking reference",
+      "emailSent": "We sent the confirmation, with the cancellation link, to {{email}}. If you cannot find it, check your spam folder.",
+      "emailNotSent": "The booking is confirmed, but the confirmation email could not be sent to {{email}} yet. We will retry automatically. Keep the booking reference.",
+      "emailSkipped": "The booking is confirmed. No confirmation email was sent. Keep the booking reference."
+    },
+    "errors": {
+      "slotTaken": "This time was just booked or is no longer available. Choose another one — your details were kept.",
+      "contactLimit": "There is a limit of upcoming bookings per contact. To book more, please contact the barbershop.",
+      "rateLimited": "Too many attempts in a short time. Please wait a moment and try again.",
+      "uncertain": "We could not confirm whether the booking was registered. Try confirming again: if it was already created, you will see the same booking, with no duplicate.",
+      "sessionExpired": "This page was open for too long. Try confirming again.",
+      "keyReused": "The details changed since the last attempt. Please confirm again.",
+      "selectionInvalid": "The chosen service or professional is no longer available. Please choose again.",
+      "validation": "Please check the details you entered.",
+      "generic": "Could not complete. Please try again."
+    }
   }
 }
