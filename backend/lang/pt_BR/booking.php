@@ -1,0 +1,46 @@
+<?php
+
+/*
+|--------------------------------------------------------------------------
+| E-mail de confirmação e páginas de cancelamento
+|--------------------------------------------------------------------------
+*/
+
+return [
+    'fields' => [
+        'service' => 'Serviço',
+        'professional' => 'Profissional',
+        'date' => 'Data',
+        'time' => 'Horário',
+        'duration' => 'Duração',
+        'price' => 'Preço',
+        'address' => 'Endereço',
+        'reference' => 'Código da reserva',
+    ],
+    'duration' => ':minutes min',
+
+    'mail' => [
+        'subject' => 'Reserva confirmada — :date',
+        'heading' => 'Reserva confirmada',
+        'greeting' => 'Olá, :name!',
+        'intro' => 'Seu horário em :shop está confirmado. Confira os detalhes:',
+        'cancel_intro' => 'Se não puder comparecer, cancele pelo botão abaixo. Abrir o link só mostra a reserva; o cancelamento acontece quando você confirmar na página.',
+        'cancel_button' => 'Cancelar reserva',
+        'cancel_note' => 'O link é pessoal e vale até o início do atendimento. Não o compartilhe.',
+        'contact' => 'Dúvidas? Fale com a barbearia: :phone.',
+        'signature' => 'Até breve,',
+    ],
+
+    'cancel' => [
+        'title' => 'Cancelar reserva',
+        'question' => 'Deseja cancelar esta reserva? Esta ação não pode ser desfeita.',
+        'button' => 'Confirmar cancelamento',
+        'done' => 'Reserva cancelada. O horário foi liberado.',
+        'already' => 'Esta reserva já está cancelada.',
+        'deadline_passed' => 'O prazo para cancelar esta reserva pelo link já terminou. Se precisar, fale com a barbearia.',
+        'error_title' => 'Link indisponível',
+        'invalid_link' => 'Este link de cancelamento é inválido ou expirou. Se precisar de ajuda, fale com a barbearia.',
+        'form_expired' => 'A página ficou aberta por muito tempo. Abra o link do e-mail novamente para cancelar.',
+        'too_many_attempts' => 'Muitas tentativas em pouco tempo. Aguarde um instante e tente novamente.',
+    ],
+];

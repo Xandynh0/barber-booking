@@ -72,6 +72,12 @@ class AppServiceProvider extends ServiceProvider
                 ->by($request->ip())
                 ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
         });
+
+        // The signed cancellation pages are HTML, not JSON: no custom
+        // response here — bootstrap/app.php renders the 429 as a page.
+        RateLimiter::for('public-cancellation', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
     }
 
     private function rateLimitedResponse(array $headers): JsonResponse
