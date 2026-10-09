@@ -440,7 +440,7 @@ Mostra o nome, o endereço e o telefone da barbearia (quando cadastrados) e os s
 
 ### Jornada `/agendar`
 
-Etapas: **serviço → profissional → dia e horário → seus dados → revisão → confirmação**. No celular, as etapas e o resumo ficam empilhados; a partir de 860 px, o resumo fica ao lado, com "A escolher" no que ainda falta.
+Etapas: **serviço → profissional → dia e horário → seus dados → revisão → confirmação**. No celular, as etapas e o resumo ficam empilhados; a partir de 900 px, o resumo fica ao lado, com "A escolher" no que ainda falta.
 
 - **Fuso:** os dias oferecidos vão de hoje até hoje + horizonte − 1, no calendário da barbearia, e os horários aparecem no fuso dela. A data e a hora nunca dependem do fuso do navegador.
 - **Dependências:**
@@ -448,7 +448,7 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
   - trocar o profissional ou o dia limpa o horário **na hora**, antes mesmo de a nova consulta responder, então "Continuar" fica desabilitado enquanto carrega;
   - um horário que não está na resposta atual da disponibilidade é descartado.
 - **Respostas fora de ordem:** cada consulta de profissionais e de horários leva um número de sequência. Só a mais recente é aplicada, e uma resposta antiga que chegue depois é ignorada.
-- **Estados:** carregando, vazio e falha com "Tentar novamente", em cada consulta.
+- **Estados:** carregando, vazio e falha com "Tentar novamente", em cada consulta. Cada resposta de profissionais e de horários fica guardada junto da consulta que ela responde; se a consulta atual é outra, a tela lê "carregando". Assim, trocar uma escolha não precisa de nenhum `setState` dentro de efeito, e o "Tentar novamente" volta ao carregamento pelo próprio clique.
 - **Estado só em memória.** Voltar etapas e trocar o idioma preservam todas as escolhas e o que foi digitado. Nada pessoal vai para `localStorage`; só o idioma, como antes. Os carregamentos não dependem de `t`, para a troca de idioma não recarregar a tela.
 - **Acessibilidade:**
   - cada etapa move o foco para o seu título;
@@ -456,6 +456,36 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
   - as escolhas são botões com `aria-pressed`, e as etapas usam `aria-current="step"`;
   - os campos têm `label`, `autocomplete`, `aria-invalid` e mensagem de erro associada;
   - todos os controles têm foco visível.
+
+### Identidade visual
+
+Referências em `docs/design/`:
+- `old-barber.png`: identidade original;
+- `2.png`: agendamento público;
+- `3.png`: cancelamento;
+- `1.png`: painel administrativo. Ele só orientou os componentes compartilhados; a agenda administrativa fica para outra entrega.
+
+As referências são pranchas de apresentação: as molduras de celular, os títulos de prancha e os vários estados lado a lado **não** foram reproduzidos. Cada estado aparece só quando é real, e nomes, preços, datas e horários vêm sempre da API.
+
+- **Tema compartilhado:** `frontend/src/styles/barber-theme.css`. Ele tem os tokens (creme, bordô, carvão, latão, superfícies, sombras e raios), a serifa expressiva para títulos e botões e uma fonte de leitura simples para textos, campos e horários. Também traz os botões primário, secundário e de perigo, o foco visível, a bolha de ícone e o cartão. Tudo fica sob a classe `.barber-theme`, sem nenhum seletor global: só as telas que adotam a classe mudam. Hoje são a homepage e `/agendar` (`.public-shell barber-theme`); a agenda administrativa pode adotá-la na sua entrega. O layout específico das telas públicas fica em `src/pages/public.css`.
+- **Fontes:** nenhuma fonte web. A serifa é uma pilha do sistema (Iowan Old Style, Palatino Linotype, Palatino, Book Antiqua, Georgia), porque as páginas de cancelamento proíbem recursos externos pela CSP e o projeto não ganha dependência nova. O desenho final varia um pouco entre sistemas operacionais.
+- **Cabeçalho público:** carvão, com tesoura e marca em serifa, um divisor de latão e "Agendamento online". O idioma aparece como texto creme, com sublinhado de latão no idioma ativo. Antes, o botão "English" inativo tinha texto carvão sobre fundo carvão (contraste 1,00:1, parecia vazio). Medido no Edge pelo proxy, agora tem 14,54:1 nos estados normal, ativo, hover e foco, e o foco ganha um contorno de latão de 3 px. Em telas estreitas, o cabeçalho quebra a linha em vez de empurrar o idioma para fora.
+- **Jornada:**
+  - etapas concluídas com check;
+  - no celular, os 5 rótulos ficam sob os marcadores; abaixo de 360 px só o rótulo da etapa atual aparece, e os demais seguem no nome acessível;
+  - carrossel de dias com setas e rolagem (os dias já respondidos sem horário ficam tracejados);
+  - grade de horários e estado vazio em cartão tracejado;
+  - resumo com ícones;
+  - "Continuar" com seta.
+- **Homepage:** apresentação com o poste de barbearia, o nome e "Agendar horário", e os serviços em cartões responsivos (grade no desktop, cartões compactos no celular).
+- **Cancelamento (Blade):** `cancellation/layout.blade.php` repete os mesmos tokens inline, porque a CSP só permite estilo inline. Os ícones são SVG inline (`cancellation/icon.blade.php`). Os estados são:
+  - **confirmar:** ícone de calendário, "Cancelar reserva?", resumo com ícones (serviço com duração e preço, profissional, data e horário com o dia da semana) e o código da reserva. Os botões são "Manter reserva" (link para `/`) e "Confirmar cancelamento" (o mesmo POST de antes);
+  - **cancelada:** check verde, "Reserva cancelada", "O horário foi liberado." e "Agendar novamente" (link para `/agendar`);
+  - **já cancelada** e **prazo encerrado:** resumo e mensagem própria;
+  - **link inválido:** só a mensagem e um link para a página inicial.
+
+  Os links novos são navegação simples e não mudam nada. O seletor de idioma e o lema decorativo da prancha não foram adicionados: o idioma da página continua vindo do navegador.
+- **Correção encontrada nas capturas:** no celular, o carrossel de dias definia a largura da coluna da grade, e a página estourava para a direita, cortando o texto dos botões. Resolvido com `grid-template-columns: minmax(0, 1fr)`. Um e-mail longo no aviso da confirmação também estourava; agora quebra a linha.
 
 ### Confirmação e idempotência
 
@@ -483,7 +513,7 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
 
 ### Testes e verificação
 
-- `frontend/src/pages/booking/Booking.test.jsx` (14): usa o `App`, o roteador e o cliente HTTP reais, e troca só o `fetch` por um servidor falso. Cobre:
+- `frontend/src/pages/booking/Booking.test.jsx` (18): usa o `App`, o roteador e o cliente HTTP reais, e troca só o `fetch` por um servidor falso. Cobre:
   - a jornada completa, com horário no fuso da barbearia e CSRF antes do POST;
   - a dependência entre escolhas, inclusive durante o carregamento;
   - a resposta fora de ordem ignorada;
@@ -494,13 +524,16 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
   - a notificação `failed` com a reserva confirmada;
   - a troca de idioma preservando tudo;
   - nada pessoal no `localStorage`;
-  - o serviço pré-selecionado e o retry do catálogo.
+  - o serviço pré-selecionado, o descarte de um serviço pré-selecionado que não é mais agendável e o retry do catálogo;
+  - o retry dos horários, voltando a "carregando" enquanto a nova consulta não responde;
+  - a preferência por English escolhida na homepage mantida ao seguir para `/agendar` (rotas reais).
 - **Defeitos introduzidos de propósito no `Booking.jsx`:** aceitar resposta antiga, chave nova a cada tentativa e não limpar o horário ao trocar de dia. Os três derrubaram testes. O terceiro só passou a ser detectado depois de reforçar o teste para segurar a resposta do novo dia; antes, o horário antigo ficava selecionado durante o carregamento sem nenhum teste falhar.
 - `Home.test.jsx` (3): catálogo real com links para a jornada, estado vazio e retry.
 - `tests/Feature/PublicCatalogTest.php` (6): respostas exatas e mínimas, filtros de ativo e vínculo, `404` para serviço inativo ou inexistente, nenhum dado de cliente, rate limit.
+- `tests/Feature/PublicCancellationTest.php`: as asserções acompanham a nova página. Cobrem o título "Cancelar reserva?", a duração e o preço do snapshot, a data sem o dia da semana mais o dia separado ("Terça-feira"), os links "Manter reserva" e "Agendar novamente" e os mesmos textos em inglês. As garantias anteriores continuam: nenhum dado de contato, GET sem efeito e nenhum `<script>`.
 - **Resultados:**
-  - frontend com **115 passed**, 5 execuções seguidas sem falha e sem avisos de `act`;
-  - `npm run lint` com 0 erros e 11 avisos `set-state-in-effect` (6 que já existiam e 5 novos, do mesmo padrão de carregar dados num efeito);
+  - frontend com **118 passed**;
+  - `npm run lint` com 0 erros e 6 avisos. Os 5 avisos `set-state-in-effect` que esta entrega tinha criado (`Home.jsx` e `Booking.jsx`) foram resolvidos. Os 6 restantes já existiam, em `AuthContext.jsx` e nas telas administrativas de serviços, profissionais, expediente e bloqueios, que estão fora do escopo desta entrega e não foram tocadas;
   - build OK;
   - backend com **198 passed** e Pint OK.
 - **Verificado pelo proxy real**, com o banco de desenvolvimento e os dados importados:
@@ -513,7 +546,12 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
   - exatamente 1 e-mail no Mailpit.
 
   Os dados criados (reserva #5, a notificação dela e as mensagens do identificador `ui-check-…`) foram removidos por ID, e as 14 tabelas de negócio voltaram ao checksum da linha de base.
-- **Pendente:** a revisão **visual** em navegador real (desktop, celular e teclado) não foi feita, porque não havia navegador disponível nesta sessão. Roteiro manual abaixo.
+- **Revisão visual em navegador real:** Microsoft Edge headless, guiado pelo `playwright-core`, contra o proxy em `localhost:8080`, em 1280×900 e 390×844, mais medições de estouro em 320 px. O script ficou fora do repositório.
+  - **Homepage e jornada:** capturas de cada etapa no desktop e no celular, do serviço à confirmação. Só duas respostas foram simuladas no navegador: o dia sem horários e o POST de confirmação. Nada foi gravado no banco.
+  - **Largura:** nenhum estouro horizontal em 390 px nem em 320 px.
+  - **Idioma:** o contraste de "English" e "Português" foi medido nos quatro estados (14,54:1). Escolher English na homepage e seguir para `/agendar` mantém "Choose the service", tanto na navegação da SPA quanto depois de recarregar.
+  - **Cancelamento:** o estado de confirmação foi capturado pelo proxy com o link assinado real de uma reserva existente, só com GET (nada muda). A CSP está presente, e a ordem do teclado é "Manter reserva" → "Confirmar cancelamento" com foco visível. O link com assinatura inválida dá `403` com "Link indisponível". Os estados cancelada, já cancelada e prazo encerrado foram renderizados, sem alterar nenhuma linha, a partir das views com os dados da mesma reserva, e capturados em PT e EN no desktop e no celular.
+- **Limite das capturas:** elas comparam composição, hierarquia, cores e estados com as referências, mas o resultado não é idêntico pixel a pixel. A serifa do sistema difere da serifa da prancha, os textos vêm da aplicação e a proporção dos componentes segue o conteúdo real.
 
 ### Roteiro manual no navegador
 
@@ -523,7 +561,8 @@ Etapas: **serviço → profissional → dia e horário → seus dados → revis�
 4. Preencha seus dados, troque para English e volte para Português: tudo deve continuar preenchido.
 5. Confirme. A tela deve mostrar "Reserva confirmada", o código e a frase sobre o e-mail, e o e-mail deve aparecer em http://localhost:8025.
 6. Em outra aba, reserve o mesmo horário: deve aparecer o aviso de conflito, a lista de horários deve ser atualizada e os dados devem continuar.
-7. Repita em largura de celular (cerca de 375 px) e só com o teclado (Tab, Enter, Espaço): o foco deve ir para o título de cada etapa.
+7. Abra o link de cancelamento do e-mail: confira o resumo com ícones e os dois botões. Confirme: deve aparecer "Reserva cancelada" com "Agendar novamente".
+8. Repita em largura de celular (cerca de 375 px) e só com o teclado (Tab, Enter, Espaço): o foco deve ir para o título de cada etapa.
 
 ## Importação de dados de teste fictícios
 
@@ -865,7 +904,7 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 - Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade**, a **criação pública de reservas** (com proteção contra double booking na transação), o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado** estão implementados. Catálogo público, telas de agendamento, reserva e cancelamento pelo admin e reenvio manual de e-mail ainda não existem.
 - **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, telas públicas de agendamento, e alerta para confirmações que esgotaram as 5 tentativas.
-- A jornada pública de agendamento existe no React (`/` e `/agendar`). Ainda falta a revisão visual em navegador real (ver "Telas públicas de agendamento"). A operação administrativa da agenda (agenda diária, reserva e cancelamento pelo admin) ainda não existe.
+- A jornada pública de agendamento existe no React (`/` e `/agendar`), revisada visualmente em navegador real contra as referências de `docs/design/` (ver "Telas públicas de agendamento"). A operação administrativa da agenda (agenda diária, reserva e cancelamento pelo admin) ainda não existe.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
