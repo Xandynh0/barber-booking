@@ -78,6 +78,11 @@ describe('App routing (admin area)', () => {
     expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Bloqueios' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Expediente semanal' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(
+        screen.getByText('Nenhum profissional cadastrado ainda — cadastre em "Profissionais" primeiro.')
+      ).toBeInTheDocument()
+    )
   })
 
   it('renders the admin navigation and the schedule blocks heading at /admin/bloqueios', async () => {
@@ -86,6 +91,7 @@ describe('App routing (admin area)', () => {
     expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Expediente' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Bloqueios cadastrados' })).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('Nenhum bloqueio cadastrado ainda.')).toBeInTheDocument())
   })
 })
 

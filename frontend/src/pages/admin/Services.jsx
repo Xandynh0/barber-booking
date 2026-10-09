@@ -73,9 +73,9 @@ function Services() {
     listServices()
       .then((body) => setServices(body.data))
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('services.errors.network'))
+        setLoadError(error)
       })
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadServices()
@@ -139,6 +139,9 @@ function Services() {
       setSubmitting(false)
     }
   }
+
+  const loadErrorMessage =
+    loadError && (loadError instanceof ApiError ? errorMessageFor(t, loadError) : t('services.errors.network'))
 
   return (
     <AdminLayout>
@@ -262,7 +265,7 @@ function Services() {
 
           {loadError && (
             <div role="alert">
-              <p className="admin-form-error">{loadError}</p>
+              <p className="admin-form-error">{loadErrorMessage}</p>
               <button type="button" className="admin-button" onClick={loadServices}>
                 {t('common.actions.tryAgain')}
               </button>

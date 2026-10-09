@@ -70,9 +70,9 @@ function WorkingHours() {
         }
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('workingHours.errors.network'))
+        setLoadError(error)
       })
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadProfessionals()
@@ -93,11 +93,11 @@ function WorkingHours() {
           setDays(body.data.days)
         })
         .catch((error) => {
-          setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('workingHours.errors.network'))
+          setLoadError(error)
         })
         .finally(() => setLoading(false))
     },
-    [t]
+    []
   )
 
   useEffect(() => {
@@ -162,6 +162,9 @@ function WorkingHours() {
     }
   }
 
+  const loadErrorMessage =
+    loadError && (loadError instanceof ApiError ? errorMessageFor(t, loadError) : t('workingHours.errors.network'))
+
   return (
     <AdminLayout>
       <div className="admin-content">
@@ -170,7 +173,7 @@ function WorkingHours() {
 
           {loadError && professionals === null && (
             <div role="alert">
-              <p className="admin-form-error">{loadError}</p>
+              <p className="admin-form-error">{loadErrorMessage}</p>
               <button type="button" className="admin-button" onClick={loadProfessionals}>
                 {t('common.actions.tryAgain')}
               </button>
@@ -212,7 +215,7 @@ function WorkingHours() {
 
               {loadError && professionals !== null && (
                 <div role="alert">
-                  <p className="admin-form-error">{loadError}</p>
+                  <p className="admin-form-error">{loadErrorMessage}</p>
                   <button type="button" className="admin-button" onClick={() => loadSchedule(professionalId)}>
                     {t('common.actions.tryAgain')}
                   </button>

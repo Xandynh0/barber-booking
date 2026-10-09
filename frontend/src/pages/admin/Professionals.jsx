@@ -55,9 +55,9 @@ function Professionals() {
         setServices(servicesBody.data)
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('professionals.errors.network'))
+        setLoadError(error)
       })
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadAll()
@@ -128,6 +128,9 @@ function Professionals() {
   }
 
   const loading = professionals === null && services === null && !loadError
+
+  const loadErrorMessage =
+    loadError && (loadError instanceof ApiError ? errorMessageFor(t, loadError) : t('professionals.errors.network'))
 
   return (
     <AdminLayout>
@@ -235,7 +238,7 @@ function Professionals() {
 
           {loadError && (
             <div role="alert">
-              <p className="admin-form-error">{loadError}</p>
+              <p className="admin-form-error">{loadErrorMessage}</p>
               <button type="button" className="admin-button" onClick={loadAll}>
                 {t('common.actions.tryAgain')}
               </button>

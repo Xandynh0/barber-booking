@@ -75,9 +75,9 @@ function ScheduleBlocks() {
         }))
       })
       .catch((error) => {
-        setLoadError(error instanceof ApiError ? errorMessageFor(t, error) : t('scheduleBlocks.errors.network'))
+        setLoadError(error)
       })
-  }, [t])
+  }, [])
 
   useEffect(() => {
     loadAll()
@@ -177,6 +177,9 @@ function ScheduleBlocks() {
   }
 
   const loading = blocks === null && !loadError
+
+  const loadErrorMessage =
+    loadError && (loadError instanceof ApiError ? errorMessageFor(t, loadError) : t('scheduleBlocks.errors.network'))
 
   return (
     <AdminLayout>
@@ -350,7 +353,7 @@ function ScheduleBlocks() {
 
           {loadError && (
             <div role="alert">
-              <p className="admin-form-error">{loadError}</p>
+              <p className="admin-form-error">{loadErrorMessage}</p>
               <button type="button" className="admin-button" onClick={loadAll}>
                 {t('common.actions.tryAgain')}
               </button>
