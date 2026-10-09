@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Exceptions\ImportCollisionException;
+use App\Models\Appointment;
 use App\Models\BusinessSettings;
 use App\Models\Professional;
 use App\Models\Service;
@@ -398,6 +399,21 @@ class ImportTestData extends Command
 
         $professionals = Professional::query()->whereIn('id', $professionalIds)->get();
         $services = Service::query()->whereIn('id', $serviceIds)->get();
+
+        // appointments references professionals/services with restrictOnDelete:
+        // records that became part of a reservation are not test fixtures
+        // anymore and must not be removed (LEIA-ME of the fixture pack).
+        $usedByAppointments = Appointment::query()
+            ->where(fn ($query) => $query->whereIn('professional_id', $professionalIds)->orWhereIn('service_id', $serviceIds))
+            ->count();
+        if ($usedByAppointments > 0) {
+            $this->error(
+                "{$usedByAppointments} reserva(s) usam profissionais ou serviços desta importação. ".
+                'Abortando — nada foi removido.'
+            );
+
+            return self::FAILURE;
+        }
 
         foreach ($professionals as $professional) {
             $workingHoursCount = $professional->workingHours()->count();
