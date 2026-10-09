@@ -7,12 +7,20 @@ import './LanguageSwitcher.css'
  * via useTranslation(), no page reload, no effect on session/CSRF/form
  * state. Labels are always "Português"/"English" regardless of the current
  * language (so a reader can always find the OTHER option), never flags.
+ *
+ * `tone="dark"` is for dark backgrounds (the public header): the default
+ * colors are meant for cream surfaces and would make the inactive option
+ * invisible on black.
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ tone = 'light' }) {
   const { t, i18n } = useTranslation()
 
   return (
-    <div className="language-switcher" role="group" aria-label={t('common.languageSwitcher.ariaLabel')}>
+    <div
+      className={`language-switcher${tone === 'dark' ? ' language-switcher--dark' : ''}`}
+      role="group"
+      aria-label={t('common.languageSwitcher.ariaLabel')}
+    >
       {SUPPORTED_LANGUAGES.map((language) => (
         <button
           key={language}

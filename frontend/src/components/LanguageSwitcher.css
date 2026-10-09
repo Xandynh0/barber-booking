@@ -29,3 +29,49 @@
   color: var(--color-cream);
   font-weight: bold;
 }
+
+/* On dark backgrounds (public header, docs/design/2.png): plain cream text,
+   the active language underlined in brass. Every state keeps cream (or
+   black on cream) text, so neither option ever reads as empty. */
+.language-switcher--dark {
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.language-switcher--dark .language-switcher-option {
+  position: relative;
+  font-size: 0.95rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid transparent;
+  color: var(--color-cream);
+}
+
+.language-switcher--dark .language-switcher-option + .language-switcher-option::before {
+  content: '';
+  position: absolute;
+  left: -0.1rem;
+  top: 25%;
+  height: 50%;
+  border-left: 1px solid rgba(176, 141, 87, 0.7);
+}
+
+.language-switcher--dark .language-switcher-option:hover {
+  background: transparent;
+  border-color: var(--color-brass);
+}
+
+.language-switcher--dark .language-switcher-option:focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.language-switcher--dark .language-switcher-option--active,
+.language-switcher--dark .language-switcher-option--active:hover {
+  background: transparent;
+  color: var(--color-cream);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--color-brass);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.45em;
+}

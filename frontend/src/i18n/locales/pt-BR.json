@@ -56,7 +56,9 @@
     "contactTitle": "Onde estamos",
     "address": "Endereço",
     "phone": "Telefone",
-    "adminLink": "Área do administrador"
+    "adminLink": "Área do administrador",
+    "servicesIntro": "Escolha um serviço para ver os horários livres.",
+    "durationAndPrice": "{{duration}} · {{price}}"
   },
   "auth": {
     "subtitle": "Acesso administrativo",
@@ -192,14 +194,15 @@
     },
     "stepOf": "Etapa {{current}} de {{total}}",
     "summary": {
-      "title": "Resumo",
+      "title": "Seu agendamento",
       "toChoose": "A escolher",
       "service": "Serviço",
       "duration": "Duração",
       "professional": "Profissional",
       "date": "Data",
       "time": "Horário",
-      "price": "Preço"
+      "price": "Preço",
+      "professionalRole": "Profissional"
     },
     "durationMinutes": "{{count}} min",
     "actions": {
@@ -215,13 +218,15 @@
       "heading": "Escolha o serviço",
       "loading": "Carregando serviços…",
       "empty": "Nenhum serviço disponível para agendamento no momento.",
-      "error": "Não foi possível carregar os serviços."
+      "error": "Não foi possível carregar os serviços.",
+      "intro": "Escolha o serviço que você quer agendar."
     },
     "professional": {
       "heading": "Escolha o profissional",
       "loading": "Carregando profissionais…",
       "empty": "Nenhum profissional disponível para este serviço no momento. Escolha outro serviço.",
-      "error": "Não foi possível carregar os profissionais."
+      "error": "Não foi possível carregar os profissionais.",
+      "intro": "Escolha quem vai atender você."
     },
     "datetime": {
       "heading": "Escolha o dia e o horário",
@@ -229,9 +234,15 @@
       "slotsLabel": "Horários disponíveis em {{date}}",
       "timezoneNote": "Horários no fuso da barbearia ({{timezone}}).",
       "loading": "Carregando horários…",
-      "empty": "Nenhum horário disponível neste dia. Escolha outro dia.",
       "error": "Não foi possível carregar os horários.",
-      "pickDate": "Escolha um dia para ver os horários."
+      "pickDate": "Escolha um dia para ver os horários.",
+      "intro": "Selecione um dos horários disponíveis para o seu atendimento.",
+      "emptyTitle": "Nenhum horário disponível neste dia",
+      "emptyHint": "Escolha outra data para ver os horários disponíveis.",
+      "previousDays": "Dias anteriores",
+      "nextDays": "Próximos dias",
+      "noSlots": "sem horários",
+      "slotsHeading": "Horários disponíveis"
     },
     "customer": {
       "heading": "Seus dados",
@@ -245,7 +256,8 @@
     "review": {
       "heading": "Revise e confirme",
       "customerTitle": "Seus dados",
-      "note": "Ao confirmar, a reserva é registrada imediatamente."
+      "note": "Ao confirmar, a reserva é registrada imediatamente.",
+      "intro": "Confira tudo antes de confirmar."
     },
     "done": {
       "heading": "Reserva confirmada",
@@ -253,7 +265,8 @@
       "reference": "Código da reserva",
       "emailSent": "Enviamos a confirmação, com o link para cancelar, para {{email}}. Se não a encontrar, confira a caixa de spam.",
       "emailNotSent": "A reserva está confirmada, mas o e-mail de confirmação ainda não pôde ser enviado para {{email}}. Vamos tentar novamente automaticamente. Guarde o código da reserva.",
-      "emailSkipped": "A reserva está confirmada. Nenhum e-mail de confirmação foi enviado. Guarde o código da reserva."
+      "emailSkipped": "A reserva está confirmada. Nenhum e-mail de confirmação foi enviado. Guarde o código da reserva.",
+      "summaryTitle": "Sua reserva"
     },
     "errors": {
       "slotTaken": "Esse horário acabou de ser reservado ou não está mais disponível. Escolha outro — seus dados foram mantidos.",
@@ -265,6 +278,7 @@
       "selectionInvalid": "O serviço ou o profissional escolhido não está mais disponível. Escolha novamente.",
       "validation": "Confira os dados informados.",
       "generic": "Não foi possível concluir. Tente novamente."
-    }
+    },
+    "headerTagline": "Agendamento online"
   }
 }

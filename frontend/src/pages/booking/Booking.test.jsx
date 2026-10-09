@@ -123,6 +123,7 @@ describe('Public booking journey', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
+    localStorage.removeItem('barber-booking-language')
   })
 
   it('books from service to confirmation, showing times in the barbershop timezone', async () => {
@@ -393,6 +394,21 @@ describe('Public booking journey', () => {
     expect(screen.getByRole('button', { name: '10:00' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('keeps English when going from the homepage to the booking journey', async () => {
+    const user = userEvent.setup()
+    renderBooking('/')
+
+    await user.click(await screen.findByRole('button', { name: 'English' }))
+    expect(await screen.findByRole('link', { name: 'Book an appointment' })).toBeInTheDocument()
+    await user.click(screen.getByRole('link', { name: 'Book an appointment' }))
+
+    expect(window.location.pathname).toBe('/agendar')
+    expect(await screen.findByRole('heading', { name: 'Choose the service' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true')
+    // What a full page load of /agendar reads back (i18n/index.js).
+    expect(localStorage.getItem('barber-booking-language')).toBe('en')
+  })
+
   it('never writes personal data to localStorage', async () => {
     const user = userEvent.setup()
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
@@ -413,6 +429,37 @@ describe('Public booking journey', () => {
     expect(await screen.findByRole('button', { name: /Barba tradicional/ })).toHaveAttribute('aria-pressed', 'true')
     await user.click(screen.getByRole('button', { name: 'Continuar' }))
     expect(await screen.findByRole('button', { name: /Bruno Costa/ })).toBeInTheDocument()
+  })
+
+  it('drops a preselected service that is no longer bookable', async () => {
+    renderBooking('/agendar?servico=99')
+
+    expect(await screen.findByRole('button', { name: /Corte degradê/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /Barba tradicional/ })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: 'Continuar' })).toBeDisabled()
+  })
+
+  it('offers a retry when the times fail to load, going back to loading meanwhile', async () => {
+    const user = userEvent.setup()
+    let release = null
+    let calls = 0
+    server.availability = (date) => {
+      calls++
+      if (calls === 1) return Promise.reject(new TypeError('Failed to fetch'))
+      return new Promise((resolve) => {
+        release = () => resolve({ ok: true, status: 200, json: async () => ({ data: { date, slots: slotsFor(date) } }) })
+      })
+    }
+
+    renderBooking()
+    await chooseServiceAndProfessional(user)
+    expect(await screen.findByText('Não foi possível carregar os horários.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Tentar novamente' }))
+    expect(screen.getByText('Carregando horários…')).toBeInTheDocument()
+    expect(screen.queryByText('Não foi possível carregar os horários.')).not.toBeInTheDocument()
+    await act(async () => release())
+    expect(await screen.findByRole('button', { name: '10:00' })).toBeInTheDocument()
   })
 
   it('offers a retry when the catalog fails to load', async () => {

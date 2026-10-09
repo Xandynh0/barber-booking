@@ -42,6 +42,30 @@ export function formatDateLabel(dateStr, language, options = { weekday: 'short',
   )
 }
 
+function capitalize(text) {
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/**
+ * The two lines of a date card, as in the reference: "Seg" / "12 out"
+ * (pt-BR) or "Mon" / "Oct 12" (en). Abbreviation dots are dropped.
+ */
+export function formatDateCard(dateStr, language) {
+  const weekday = formatDateLabel(dateStr, language, { weekday: 'short' }).replace('.', '')
+  const dayMonth = formatDateLabel(dateStr, language, { day: 'numeric', month: 'short' }).replace(/\./g, '').replace(' de ', ' ')
+
+  return { weekday: capitalize(weekday), dayMonth }
+}
+
+/** "12 de outubro" / "October 12", and "Segunda-feira" / "Monday" apart. */
+export function formatDayMonth(dateStr, language) {
+  return formatDateLabel(dateStr, language, { day: 'numeric', month: 'long' })
+}
+
+export function formatWeekday(dateStr, language) {
+  return capitalize(formatDateLabel(dateStr, language, { weekday: 'long' }))
+}
+
 export function formatLongDate(dateStr, language) {
   return formatDateLabel(dateStr, language, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 }

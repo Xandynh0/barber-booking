@@ -56,7 +56,9 @@
     "contactTitle": "Find us",
     "address": "Address",
     "phone": "Phone",
-    "adminLink": "Administrator area"
+    "adminLink": "Administrator area",
+    "servicesIntro": "Choose a service to see the free times.",
+    "durationAndPrice": "{{duration}} · {{price}}"
   },
   "auth": {
     "subtitle": "Administrative access",
@@ -192,14 +194,15 @@
     },
     "stepOf": "Step {{current}} of {{total}}",
     "summary": {
-      "title": "Summary",
+      "title": "Your booking",
       "toChoose": "To be chosen",
       "service": "Service",
       "duration": "Duration",
       "professional": "Professional",
       "date": "Date",
       "time": "Time",
-      "price": "Price"
+      "price": "Price",
+      "professionalRole": "Professional"
     },
     "durationMinutes": "{{count}} min",
     "actions": {
@@ -215,13 +218,15 @@
       "heading": "Choose the service",
       "loading": "Loading services…",
       "empty": "No services are available for booking right now.",
-      "error": "Could not load the services."
+      "error": "Could not load the services.",
+      "intro": "Choose the service you want to book."
     },
     "professional": {
       "heading": "Choose the professional",
       "loading": "Loading professionals…",
       "empty": "No professional is available for this service right now. Choose another service.",
-      "error": "Could not load the professionals."
+      "error": "Could not load the professionals.",
+      "intro": "Choose who will attend you."
     },
     "datetime": {
       "heading": "Choose the day and time",
@@ -229,9 +234,15 @@
       "slotsLabel": "Available times on {{date}}",
       "timezoneNote": "Times in the barbershop's timezone ({{timezone}}).",
       "loading": "Loading times…",
-      "empty": "No times available on this day. Choose another day.",
       "error": "Could not load the times.",
-      "pickDate": "Choose a day to see the times."
+      "pickDate": "Choose a day to see the times.",
+      "intro": "Select one of the available times for your appointment.",
+      "emptyTitle": "No times available on this day",
+      "emptyHint": "Choose another date to see the available times.",
+      "previousDays": "Previous days",
+      "nextDays": "Next days",
+      "noSlots": "no times",
+      "slotsHeading": "Available times"
     },
     "customer": {
       "heading": "Your details",
@@ -245,7 +256,8 @@
     "review": {
       "heading": "Review and confirm",
       "customerTitle": "Your details",
-      "note": "When you confirm, the booking is registered immediately."
+      "note": "When you confirm, the booking is registered immediately.",
+      "intro": "Check everything before confirming."
     },
     "done": {
       "heading": "Booking confirmed",
@@ -253,7 +265,8 @@
       "reference": "Booking reference",
       "emailSent": "We sent the confirmation, with the cancellation link, to {{email}}. If you cannot find it, check your spam folder.",
       "emailNotSent": "The booking is confirmed, but the confirmation email could not be sent to {{email}} yet. We will retry automatically. Keep the booking reference.",
-      "emailSkipped": "The booking is confirmed. No confirmation email was sent. Keep the booking reference."
+      "emailSkipped": "The booking is confirmed. No confirmation email was sent. Keep the booking reference.",
+      "summaryTitle": "Your booking"
     },
     "errors": {
       "slotTaken": "This time was just booked or is no longer available. Choose another one — your details were kept.",
@@ -265,6 +278,7 @@
       "selectionInvalid": "The chosen service or professional is no longer available. Please choose again.",
       "validation": "Please check the details you entered.",
       "generic": "Could not complete. Please try again."
-    }
+    },
+    "headerTagline": "Online booking"
   }
 }
