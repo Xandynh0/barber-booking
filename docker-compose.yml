@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
     env_file:
       - ./backend/.env
-    environment:
+    environment: &backend-environment
       DB_CONNECTION: mysql
       DB_HOST: mysql
       DB_PORT: 3306
@@ -62,6 +62,41 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
+
+  # Laravel scheduler: runs the recovery sweep for confirmation e-mails
+  # (routes/console.php) every minute. Same image, code and environment as
+  # the backend. One container only: the fixed container_name makes Compose
+  # reuse it on every `up`/restart (and refuse --scale), and the task itself
+  # is withoutOverlapping + onOneServer.
+  scheduler:
+    build:
+      context: ./backend
+    container_name: barber-booking-scheduler
+    restart: unless-stopped
+    # tini as PID 1: forwards SIGTERM so `docker compose stop` ends
+    # schedule:work promptly instead of waiting for the kill timeout.
+    init: true
+    command: ["php", "artisan", "schedule:work"]
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    volumes:
+      - ./backend:/var/www/html
+    depends_on:
+      mysql:
+        condition: service_healthy
+      mailpit:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Anchored on the PHP process itself (PID 1 is tini, whose command line
+      # also contains "schedule:work").
+      test: ["CMD", "pgrep", "-f", "^php artisan schedule:work"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   frontend:
     build:
