@@ -419,6 +419,151 @@ O serviço `scheduler` do `docker-compose.yml` roda `php artisan schedule:work` 
   3. Depois só essas reservas (#3 e #4), suas notificações e suas mensagens no Mailpit foram removidas, por ID. Os dados de negócio do banco de desenvolvimento voltaram ao mesmo checksum da linha de base.
 - **Não há worker de fila nem Redis:** a fila continua `database` e sem consumidor, e nada do projeto depende dela.
 
+## Telas públicas de agendamento
+
+A homepage (`/`) e a jornada `/agendar` usam só os endpoints públicos. Não há conta, e o cliente nunca vê serviços ou horários fictícios. O frontend não recalcula nenhuma regra de agendamento: a disponibilidade vem sempre do motor, e a criação passa sempre pelo POST com revalidação na transação.
+
+### Endpoints de catálogo (novos)
+
+`GET /api/v1/public/business`, `GET /api/v1/public/services` e `GET /api/v1/public/services/{id}/professionals` (`PublicCatalogController`, contrato na seção 19 do planejamento), com rate limit de 60 por minuto por IP.
+
+As respostas são mínimas:
+- **barbearia:** nome, endereço, telefone, fuso e horizonte;
+- **serviços:** só os ativos que ao menos um profissional ativo oferece, para não levar o cliente a um beco sem saída;
+- **profissionais:** só os ativos que oferecem aquele serviço.
+
+Nenhuma configuração administrativa, flag interna ou contato de cliente aparece nelas.
+
+### Homepage
+
+Mostra o nome, o endereço e o telefone da barbearia (quando cadastrados) e os serviços agendáveis com duração e preço. Cada serviço tem um link para `/agendar?servico={id}`, que já chega com o serviço escolhido. A antiga verificação de status da API (`api/health.js`, da fundação técnica) saiu da homepage; o endpoint `/up` continua no backend.
+
+### Jornada `/agendar`
+
+Etapas: **serviço → profissional → dia e horário → seus dados → revisão → confirmação**. No celular, as etapas e o resumo ficam empilhados; a partir de 900 px, o resumo fica ao lado, com "A escolher" no que ainda falta.
+
+- **Fuso:** os dias oferecidos vão de hoje até hoje + horizonte − 1, no calendário da barbearia, e os horários aparecem no fuso dela. A data e a hora nunca dependem do fuso do navegador.
+- **Dependências:**
+  - trocar o serviço limpa o profissional e o horário;
+  - trocar o profissional ou o dia limpa o horário **na hora**, antes mesmo de a nova consulta responder, então "Continuar" fica desabilitado enquanto carrega;
+  - um horário que não está na resposta atual da disponibilidade é descartado.
+- **Respostas fora de ordem:** cada consulta de profissionais e de horários leva um número de sequência. Só a mais recente é aplicada, e uma resposta antiga que chegue depois é ignorada.
+- **Estados:** carregando, vazio e falha com "Tentar novamente", em cada consulta. Cada resposta de profissionais e de horários fica guardada junto da consulta que ela responde; se a consulta atual é outra, a tela lê "carregando". Assim, trocar uma escolha não precisa de nenhum `setState` dentro de efeito, e o "Tentar novamente" volta ao carregamento pelo próprio clique.
+- **Estado só em memória.** Voltar etapas e trocar o idioma preservam todas as escolhas e o que foi digitado. Nada pessoal vai para `localStorage`; só o idioma, como antes. Os carregamentos não dependem de `t`, para a troca de idioma não recarregar a tela.
+- **Acessibilidade:**
+  - cada etapa move o foco para o seu título;
+  - erros saem em `role="alert"` e carregamentos em `role="status"`;
+  - as escolhas são botões com `aria-pressed`, e as etapas usam `aria-current="step"`;
+  - os campos têm `label`, `autocomplete`, `aria-invalid` e mensagem de erro associada;
+  - todos os controles têm foco visível.
+
+### Identidade visual
+
+Referências em `docs/design/`:
+- `old-barber.png`: identidade original;
+- `2.png`: agendamento público;
+- `3.png`: cancelamento;
+- `1.png`: painel administrativo. Ele só orientou os componentes compartilhados; a agenda administrativa fica para outra entrega.
+
+As referências são pranchas de apresentação: as molduras de celular, os títulos de prancha e os vários estados lado a lado **não** foram reproduzidos. Cada estado aparece só quando é real, e nomes, preços, datas e horários vêm sempre da API.
+
+- **Tema compartilhado:** `frontend/src/styles/barber-theme.css`. Ele tem os tokens (creme, bordô, carvão, latão, superfícies, sombras e raios), a serifa expressiva para títulos e botões e uma fonte de leitura simples para textos, campos e horários. Também traz os botões primário, secundário e de perigo, o foco visível, a bolha de ícone e o cartão. Tudo fica sob a classe `.barber-theme`, sem nenhum seletor global: só as telas que adotam a classe mudam. Hoje são a homepage e `/agendar` (`.public-shell barber-theme`); a agenda administrativa pode adotá-la na sua entrega. O layout específico das telas públicas fica em `src/pages/public.css`.
+- **Fontes:** nenhuma fonte web. A serifa é uma pilha do sistema (Iowan Old Style, Palatino Linotype, Palatino, Book Antiqua, Georgia), porque as páginas de cancelamento proíbem recursos externos pela CSP e o projeto não ganha dependência nova. O desenho final varia um pouco entre sistemas operacionais.
+- **Cabeçalho público:** carvão, com tesoura e marca em serifa, um divisor de latão e "Agendamento online". O idioma aparece como texto creme, com sublinhado de latão no idioma ativo. Antes, o botão "English" inativo tinha texto carvão sobre fundo carvão (contraste 1,00:1, parecia vazio). Medido no Edge pelo proxy, agora tem 14,54:1 nos estados normal, ativo, hover e foco, e o foco ganha um contorno de latão de 3 px. Em telas estreitas, o cabeçalho quebra a linha em vez de empurrar o idioma para fora.
+- **Jornada:**
+  - etapas concluídas com check;
+  - no celular, os 5 rótulos ficam sob os marcadores; abaixo de 360 px só o rótulo da etapa atual aparece, e os demais seguem no nome acessível;
+  - carrossel de dias com setas e rolagem (os dias já respondidos sem horário ficam tracejados);
+  - grade de horários e estado vazio em cartão tracejado;
+  - resumo com ícones;
+  - "Continuar" com seta.
+- **Homepage:** apresentação com o poste de barbearia, o nome e "Agendar horário", e os serviços em cartões responsivos (grade no desktop, cartões compactos no celular).
+- **Cancelamento (Blade):** `cancellation/layout.blade.php` repete os mesmos tokens inline, porque a CSP só permite estilo inline. Os ícones são SVG inline (`cancellation/icon.blade.php`). Os estados são:
+  - **confirmar:** ícone de calendário, "Cancelar reserva?", resumo com ícones (serviço com duração e preço, profissional, data e horário com o dia da semana) e o código da reserva. Os botões são "Manter reserva" (link para `/`) e "Confirmar cancelamento" (o mesmo POST de antes);
+  - **cancelada:** check verde, "Reserva cancelada", "O horário foi liberado." e "Agendar novamente" (link para `/agendar`);
+  - **já cancelada** e **prazo encerrado:** resumo e mensagem própria;
+  - **link inválido:** só a mensagem e um link para a página inicial.
+
+  Os links novos são navegação simples e não mudam nada. O seletor de idioma e o lema decorativo da prancha não foram adicionados: o idioma da página continua vindo do navegador.
+- **Correção encontrada nas capturas:** no celular, o carrossel de dias definia a largura da coluna da grade, e a página estourava para a direita, cortando o texto dos botões. Resolvido com `grid-template-columns: minmax(0, 1fr)`. Um e-mail longo no aviso da confirmação também estourava; agora quebra a linha.
+
+### Confirmação e idempotência
+
+- **Chave por tentativa:** cada tentativa lógica tem uma `Idempotency-Key` (UUID) presa ao payload exato. Um retry com o mesmo payload reutiliza a chave, inclusive depois de falha de rede, timeout ou 5xx, e o backend devolve a mesma reserva sem duplicar. Se qualquer campo mudar, a chave é nova.
+- **CSRF antes do POST:** o POST sai do mesmo domínio, então o Sanctum o trata como *stateful* e exige CSRF. O frontend busca `/sanctum/csrf-cookie` antes de cada envio. Verificado pelo proxy: sem o cookie, a resposta é `419 SESSION_EXPIRED`.
+- **Clique repetido:** o botão fica desabilitado durante o envio (`aria-busy`), e só uma requisição sai.
+- **Respostas da API:**
+
+| Resposta | O que a tela faz |
+|---|---|
+| `409 SLOT_UNAVAILABLE` | Explica o conflito, volta ao passo de horário, consulta os horários de novo e mantém os dados do cliente |
+| `422` em campos do cliente | Volta a "Seus dados" com os erros nos campos |
+| `422` em serviço ou profissional | Volta ao serviço e recarrega o catálogo |
+| `409 CONTACT_LIMIT_REACHED` | Explica o limite por contato |
+| `429` | Pede para aguardar |
+| `419` | Permite tentar de novo |
+| Rede, timeout ou 5xx | Avisa que não foi possível confirmar se a reserva foi registrada e oferece "Tentar confirmar novamente" com a mesma chave |
+
+- **Reserva e e-mail são coisas separadas.** A reserva está confirmada assim que a API responde `201` ou `200`. O texto do e-mail depende de `notification_status`:
+  - `sent`: "enviamos a confirmação... confira o spam", sem prometer que chegou;
+  - `failed` ou `pending`: a reserva está confirmada, o e-mail ainda não pôde ser enviado e haverá nova tentativa;
+  - `skipped`: nenhum e-mail foi enviado.
+
+  Uma falha de e-mail nunca aparece como falha da reserva.
+
+### Testes e verificação
+
+- `frontend/src/pages/booking/Booking.test.jsx` (18): usa o `App`, o roteador e o cliente HTTP reais, e troca só o `fetch` por um servidor falso. Cobre:
+  - a jornada completa, com horário no fuso da barbearia e CSRF antes do POST;
+  - a dependência entre escolhas, inclusive durante o carregamento;
+  - a resposta fora de ordem ignorada;
+  - o conflito com atualização dos horários e dados mantidos;
+  - o retry com a mesma chave e a chave nova quando o payload muda;
+  - o clique repetido com um só POST;
+  - os erros de validação nos campos e o limite por contato;
+  - a notificação `failed` com a reserva confirmada;
+  - a troca de idioma preservando tudo;
+  - nada pessoal no `localStorage`;
+  - o serviço pré-selecionado, o descarte de um serviço pré-selecionado que não é mais agendável e o retry do catálogo;
+  - o retry dos horários, voltando a "carregando" enquanto a nova consulta não responde;
+  - a preferência por English escolhida na homepage mantida ao seguir para `/agendar` (rotas reais).
+- **Defeitos introduzidos de propósito no `Booking.jsx`:** aceitar resposta antiga, chave nova a cada tentativa e não limpar o horário ao trocar de dia. Os três derrubaram testes. O terceiro só passou a ser detectado depois de reforçar o teste para segurar a resposta do novo dia; antes, o horário antigo ficava selecionado durante o carregamento sem nenhum teste falhar.
+- `Home.test.jsx` (3): catálogo real com links para a jornada, estado vazio e retry.
+- `tests/Feature/PublicCatalogTest.php` (6): respostas exatas e mínimas, filtros de ativo e vínculo, `404` para serviço inativo ou inexistente, nenhum dado de cliente, rate limit.
+- `tests/Feature/PublicCancellationTest.php`: as asserções acompanham a nova página. Cobrem o título "Cancelar reserva?", a duração e o preço do snapshot, a data sem o dia da semana mais o dia separado ("Terça-feira"), os links "Manter reserva" e "Agendar novamente" e os mesmos textos em inglês. As garantias anteriores continuam: nenhum dado de contato, GET sem efeito e nenhum `<script>`.
+- **Resultados:**
+  - frontend com **118 passed**;
+  - `npm run lint` com 0 erros e 6 avisos. Os 5 avisos `set-state-in-effect` que esta entrega tinha criado (`Home.jsx` e `Booking.jsx`) foram resolvidos. Os 6 restantes já existiam, em `AuthContext.jsx` e nas telas administrativas de serviços, profissionais, expediente e bloqueios, que estão fora do escopo desta entrega e não foram tocadas;
+  - build OK;
+  - backend com **198 passed** e Pint OK.
+- **Verificado pelo proxy real**, com o banco de desenvolvimento e os dados importados:
+  - `/agendar` é servida pela SPA;
+  - o catálogo traz 13 serviços agendáveis (os 15 importados menos os 2 inativos) e os profissionais ativos do serviço;
+  - a disponibilidade de um dia com expediente funciona;
+  - o POST *stateful* sem cookie CSRF dá `419`, e com o cookie dá `201` com `notification_status: sent`;
+  - o retry com a mesma chave dá `200` com o mesmo `public_id`;
+  - outra chave no mesmo horário dá `409 SLOT_UNAVAILABLE`;
+  - exatamente 1 e-mail no Mailpit.
+
+  Os dados criados (reserva #5, a notificação dela e as mensagens do identificador `ui-check-…`) foram removidos por ID, e as 14 tabelas de negócio voltaram ao checksum da linha de base.
+- **Revisão visual em navegador real:** Microsoft Edge headless, guiado pelo `playwright-core`, contra o proxy em `localhost:8080`, em 1280×900 e 390×844, mais medições de estouro em 320 px. O script ficou fora do repositório.
+  - **Homepage e jornada:** capturas de cada etapa no desktop e no celular, do serviço à confirmação. Só duas respostas foram simuladas no navegador: o dia sem horários e o POST de confirmação. Nada foi gravado no banco.
+  - **Largura:** nenhum estouro horizontal em 390 px nem em 320 px.
+  - **Idioma:** o contraste de "English" e "Português" foi medido nos quatro estados (14,54:1). Escolher English na homepage e seguir para `/agendar` mantém "Choose the service", tanto na navegação da SPA quanto depois de recarregar.
+  - **Cancelamento:** o estado de confirmação foi capturado pelo proxy com o link assinado real de uma reserva existente, só com GET (nada muda). A CSP está presente, e a ordem do teclado é "Manter reserva" → "Confirmar cancelamento" com foco visível. O link com assinatura inválida dá `403` com "Link indisponível". Os estados cancelada, já cancelada e prazo encerrado foram renderizados, sem alterar nenhuma linha, a partir das views com os dados da mesma reserva, e capturados em PT e EN no desktop e no celular.
+- **Limite das capturas:** elas comparam composição, hierarquia, cores e estados com as referências, mas o resultado não é idêntico pixel a pixel. A serifa do sistema difere da serifa da prancha, os textos vêm da aplicação e a proporção dos componentes segue o conteúdo real.
+
+### Roteiro manual no navegador
+
+1. Cadastre o expediente de um profissional ativo vinculado a um serviço ativo (os dados importados não têm expediente).
+2. Em http://localhost:8080, confira o nome, os serviços com duração e preço e o botão "Agendar horário". Clique em "Agendar este serviço" num serviço: a jornada deve abrir com ele já escolhido.
+3. Avance até os horários. Troque de dia: o horário escolhido deve sumir do resumo, e "Continuar" deve ficar desabilitado até escolher outro.
+4. Preencha seus dados, troque para English e volte para Português: tudo deve continuar preenchido.
+5. Confirme. A tela deve mostrar "Reserva confirmada", o código e a frase sobre o e-mail, e o e-mail deve aparecer em http://localhost:8025.
+6. Em outra aba, reserve o mesmo horário: deve aparecer o aviso de conflito, a lista de horários deve ser atualizada e os dados devem continuar.
+7. Abra o link de cancelamento do e-mail: confira o resumo com ícones e os dois botões. Confirme: deve aparecer "Reserva cancelada" com "Agendar novamente".
+8. Repita em largura de celular (cerca de 375 px) e só com o teclado (Tab, Enter, Espaço): o foco deve ir para o título de cada etapa.
+
 ## Importação de dados de teste fictícios
 
 Comando manual (`backend/app/Console/Commands/ImportTestData.php`) para popular o banco de desenvolvimento com um pacote fixo de 15 serviços e 12 profissionais fictícios (`dados-teste-barber-booking`, mantido fora do repositório). **Nunca roda no boot, seed padrão ou CI** — é estritamente `php artisan import:test-data`, à mão.
@@ -759,7 +904,7 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 - Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade**, a **criação pública de reservas** (com proteção contra double booking na transação), o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado** estão implementados. Catálogo público, telas de agendamento, reserva e cancelamento pelo admin e reenvio manual de e-mail ainda não existem.
 - **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, telas públicas de agendamento, e alerta para confirmações que esgotaram as 5 tentativas.
-- O motor e a criação de reservas ainda não têm tela no React; só o cancelamento tem página, e ela é Laravel, como o planejamento prevê.
+- A jornada pública de agendamento existe no React (`/` e `/agendar`), revisada visualmente em navegador real contra as referências de `docs/design/` (ver "Telas públicas de agendamento"). A operação administrativa da agenda (agenda diária, reserva e cancelamento pelo admin) ainda não existe.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.

@@ -1,60 +1,151 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { fetchHealth } from '../api/health'
-import { LanguageSwitcher } from '../components/LanguageSwitcher'
-import '../App.css'
+import { Link } from 'react-router-dom'
+import { getBusiness, listPublicServices } from '../api/publicBooking'
+import { PublicHeader } from '../components/PublicHeader'
+import { ArrowRightIcon, BarberPoleIcon, ClockIcon, MapPinIcon, PhoneIcon, ScissorsIcon } from '../components/PublicIcons'
+import { formatPrice } from '../utils/publicFormat'
+import '../styles/barber-theme.css'
+import './public.css'
 
+/**
+ * Public homepage (docs/planejamento-barbearia-mvp.md, seção 2): the
+ * barbershop's name and contact, and the services that can actually be
+ * booked right now, straight from the API — no fictitious content. Same
+ * identity as the booking journey (docs/design/old-barber.png), with the
+ * catalog as responsive cards.
+ */
 function Home() {
-  const { t } = useTranslation()
-  const [state, setState] = useState('checking')
-  const [detail, setDetail] = useState('')
+  const { t, i18n } = useTranslation()
+  const [business, setBusiness] = useState(null)
+  const [services, setServices] = useState(null)
+  const [servicesFailed, setServicesFailed] = useState(false)
+
+  // Only sets state once the API answers; the retry button puts the list
+  // back to "loading" itself (react-hooks set-state-in-effect).
+  const fetchHome = useCallback(() => {
+    // The business details are a nicety on this page: if they fail, the
+    // brand and the services still render.
+    getBusiness()
+      .then((body) => setBusiness(body.data))
+      .catch(() => setBusiness(null))
+
+    listPublicServices()
+      .then((body) => setServices(body.data))
+      .catch(() => setServicesFailed(true))
+  }, [])
 
   useEffect(() => {
-    let cancelled = false
+    fetchHome()
+  }, [fetchHome])
 
-    fetchHealth()
-      .then((body) => {
-        if (cancelled) return
-        setState('online')
-        setDetail(t('home.statusDetailOnline', { status: body.status }))
-      })
-      .catch((error) => {
-        if (cancelled) return
-        setState('offline')
-        setDetail(error.message)
-      })
+  function reload() {
+    setServicesFailed(false)
+    setServices(null)
+    fetchHome()
+  }
 
-    return () => {
-      cancelled = true
-    }
-  }, [t])
-
-  const statusLabel = { checking: t('home.statusChecking'), online: t('home.statusOnline'), offline: t('home.statusOffline') }[
-    state
-  ]
+  const shopName = business?.name || t('common.brand')
 
   return (
-    <main className="page">
-      <div className="page-top-bar">
-        <LanguageSwitcher />
-      </div>
+    <div className="public-shell barber-theme">
+      <PublicHeader shopName={shopName} />
 
-      <h1 className="brand">{t('common.brand')}</h1>
-      <p className="tagline">{t('home.tagline')}</p>
+      <main className="home-page">
+        <section className="home-hero theme-card" aria-labelledby="home-title">
+          <BarberPoleIcon size={64} className="home-hero-pole" />
+          <div className="home-hero-text">
+            <h1 id="home-title" className="home-title">
+              {shopName}
+            </h1>
+            <p className="home-tagline">{t('home.tagline')}</p>
+            <div className="home-hero-actions">
+              <Link className="primary-button" to="/agendar">
+                {t('home.bookCta')}
+                <ArrowRightIcon size={18} />
+              </Link>
+            </div>
+            {business && (business.address || business.phone) && (
+              <dl className="home-contact" aria-label={t('home.contactTitle')}>
+                {business.address && (
+                  <div>
+                    <dt>
+                      <MapPinIcon size={18} />
+                      <span className="sr-only">{t('home.address')}</span>
+                    </dt>
+                    <dd>{business.address}</dd>
+                  </div>
+                )}
+                {business.phone && (
+                  <div>
+                    <dt>
+                      <PhoneIcon size={18} />
+                      <span className="sr-only">{t('home.phone')}</span>
+                    </dt>
+                    <dd>{business.phone}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
+          </div>
+        </section>
 
-      <hr className="rule" />
+        <section className="home-catalog" aria-labelledby="home-services-title">
+          <div className="home-catalog-header">
+            <h2 id="home-services-title" className="home-section-title">
+              {t('home.servicesTitle')}
+            </h2>
+            <p className="booking-intro">{t('home.servicesIntro')}</p>
+          </div>
 
-      <div className="status-card">
-        <span className="status-label">{t('home.apiStatusLabel')}</span>
-        <span className="status-value" data-state={state}>
-          <span className="status-dot" aria-hidden="true" />
-          {statusLabel}
-        </span>
-        {detail && <p className="status-detail">{detail}</p>}
-      </div>
+          {services === null && !servicesFailed && (
+            <p role="status" className="booking-loading">
+              {t('home.servicesLoading')}
+            </p>
+          )}
 
-      <p className="footnote">{t('home.footnote')}</p>
-    </main>
+          {servicesFailed && (
+            <div role="alert" className="public-notice public-notice--error">
+              <p>{t('home.servicesError')}</p>
+              <button type="button" className="secondary-button" onClick={reload}>
+                {t('booking.actions.retry')}
+              </button>
+            </div>
+          )}
+
+          {services !== null && services.length === 0 && <p className="booking-hint">{t('home.servicesEmpty')}</p>}
+
+          {services !== null && services.length > 0 && (
+            <ul className="home-services">
+              {services.map((service) => (
+                <li key={service.id} className="home-service theme-card">
+                  <span className="icon-bubble home-service-icon">
+                    <ScissorsIcon size={22} />
+                  </span>
+                  <h3 className="home-service-name">{service.name}</h3>
+                  {service.description && <p className="home-service-description">{service.description}</p>}
+                  <p className="home-service-meta">
+                    <span className="home-service-duration">
+                      <ClockIcon size={16} />
+                      {t('booking.durationMinutes', { count: service.duration_minutes })}
+                    </span>
+                    <span className="home-service-price">{formatPrice(service.price, i18n.language)}</span>
+                  </p>
+                  <Link className="secondary-button home-service-link" to={`/agendar?servico=${service.id}`}>
+                    {t('home.bookThis')}
+                    <span className="sr-only">: {service.name}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <p className="home-footnote">
+          <Link to="/admin/login">{t('home.adminLink')}</Link>
+        </p>
+      </main>
+    </div>
   )
 }
 

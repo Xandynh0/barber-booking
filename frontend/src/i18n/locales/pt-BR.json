@@ -47,13 +47,18 @@
   },
   "home": {
     "tagline": "Tradição no estilo. Simplicidade na agenda.",
-    "apiStatusLabel": "Status da API",
-    "statusChecking": "Verificando...",
-    "statusOnline": "Conectado",
-    "statusOffline": "Indisponível",
-    "statusDetailOnline": "API e banco de dados respondendo ({{status}}).",
-    "statusDetailOffline": "Não foi possível conectar à API no momento.",
-    "footnote": "Fundação técnica em construção — sem agendamentos reais nesta etapa."
+    "bookCta": "Agendar horário",
+    "servicesTitle": "Serviços",
+    "servicesLoading": "Carregando serviços…",
+    "servicesEmpty": "Nenhum serviço disponível para agendamento no momento.",
+    "servicesError": "Não foi possível carregar os serviços.",
+    "bookThis": "Agendar este serviço",
+    "contactTitle": "Onde estamos",
+    "address": "Endereço",
+    "phone": "Telefone",
+    "adminLink": "Área do administrador",
+    "servicesIntro": "Escolha um serviço para ver os horários livres.",
+    "durationAndPrice": "{{duration}} · {{price}}"
   },
   "auth": {
     "subtitle": "Acesso administrativo",
@@ -175,5 +180,105 @@
     },
     "professionalLabel": "Profissional",
     "noProfessionalsYet": "Nenhum profissional cadastrado ainda — cadastre em \"Profissionais\" primeiro."
+  },
+  "booking": {
+    "title": "Agendar horário",
+    "backHome": "Voltar ao início",
+    "stepsLabel": "Etapas do agendamento",
+    "steps": {
+      "service": "Serviço",
+      "professional": "Profissional",
+      "datetime": "Horário",
+      "customer": "Seus dados",
+      "review": "Revisão"
+    },
+    "stepOf": "Etapa {{current}} de {{total}}",
+    "summary": {
+      "title": "Seu agendamento",
+      "toChoose": "A escolher",
+      "service": "Serviço",
+      "duration": "Duração",
+      "professional": "Profissional",
+      "date": "Data",
+      "time": "Horário",
+      "price": "Preço",
+      "professionalRole": "Profissional"
+    },
+    "durationMinutes": "{{count}} min",
+    "actions": {
+      "back": "Voltar",
+      "continue": "Continuar",
+      "confirm": "Confirmar agendamento",
+      "confirming": "Confirmando…",
+      "retry": "Tentar novamente",
+      "tryConfirmAgain": "Tentar confirmar novamente",
+      "newBooking": "Fazer outra reserva"
+    },
+    "service": {
+      "heading": "Escolha o serviço",
+      "loading": "Carregando serviços…",
+      "empty": "Nenhum serviço disponível para agendamento no momento.",
+      "error": "Não foi possível carregar os serviços.",
+      "intro": "Escolha o serviço que você quer agendar."
+    },
+    "professional": {
+      "heading": "Escolha o profissional",
+      "loading": "Carregando profissionais…",
+      "empty": "Nenhum profissional disponível para este serviço no momento. Escolha outro serviço.",
+      "error": "Não foi possível carregar os profissionais.",
+      "intro": "Escolha quem vai atender você."
+    },
+    "datetime": {
+      "heading": "Escolha o dia e o horário",
+      "datesLabel": "Dia",
+      "slotsLabel": "Horários disponíveis em {{date}}",
+      "timezoneNote": "Horários no fuso da barbearia ({{timezone}}).",
+      "loading": "Carregando horários…",
+      "error": "Não foi possível carregar os horários.",
+      "pickDate": "Escolha um dia para ver os horários.",
+      "intro": "Selecione um dos horários disponíveis para o seu atendimento.",
+      "emptyTitle": "Nenhum horário disponível neste dia",
+      "emptyHint": "Escolha outra data para ver os horários disponíveis.",
+      "previousDays": "Dias anteriores",
+      "nextDays": "Próximos dias",
+      "noSlots": "sem horários",
+      "slotsHeading": "Horários disponíveis"
+    },
+    "customer": {
+      "heading": "Seus dados",
+      "intro": "Usamos estes dados só para esta reserva e para enviar a confirmação.",
+      "name": "Nome",
+      "email": "E-mail",
+      "phone": "Telefone com DDD",
+      "phoneHint": "Ex.: (11) 99999-9999",
+      "required": "Preencha este campo."
+    },
+    "review": {
+      "heading": "Revise e confirme",
+      "customerTitle": "Seus dados",
+      "note": "Ao confirmar, a reserva é registrada imediatamente.",
+      "intro": "Confira tudo antes de confirmar."
+    },
+    "done": {
+      "heading": "Reserva confirmada",
+      "intro": "Seu horário está reservado.",
+      "reference": "Código da reserva",
+      "emailSent": "Enviamos a confirmação, com o link para cancelar, para {{email}}. Se não a encontrar, confira a caixa de spam.",
+      "emailNotSent": "A reserva está confirmada, mas o e-mail de confirmação ainda não pôde ser enviado para {{email}}. Vamos tentar novamente automaticamente. Guarde o código da reserva.",
+      "emailSkipped": "A reserva está confirmada. Nenhum e-mail de confirmação foi enviado. Guarde o código da reserva.",
+      "summaryTitle": "Sua reserva"
+    },
+    "errors": {
+      "slotTaken": "Esse horário acabou de ser reservado ou não está mais disponível. Escolha outro — seus dados foram mantidos.",
+      "contactLimit": "Há um limite de reservas futuras por contato. Para agendar mais, fale com a barbearia.",
+      "rateLimited": "Muitas tentativas em pouco tempo. Aguarde um instante e tente novamente.",
+      "uncertain": "Não conseguimos confirmar se a reserva foi registrada. Tente confirmar novamente: se ela já tiver sido criada, você verá a mesma reserva, sem duplicar.",
+      "sessionExpired": "A página ficou aberta por muito tempo. Tente confirmar novamente.",
+      "keyReused": "Os dados mudaram desde a última tentativa. Confirme novamente.",
+      "selectionInvalid": "O serviço ou o profissional escolhido não está mais disponível. Escolha novamente.",
+      "validation": "Confira os dados informados.",
+      "generic": "Não foi possível concluir. Tente novamente."
+    },
+    "headerTagline": "Agendamento online"
   }
 }

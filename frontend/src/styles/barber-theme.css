@@ -1,0 +1,160 @@
+/* Barber Booking visual identity (docs/design/old-barber.png, 1.png, 2.png,
+   3.png): tokens and the building blocks every reviewed screen shares —
+   serif display face for titles and buttons, plain reading face for text,
+   fields and times, cream surfaces, maroon actions, brass details, soft
+   shadows.
+
+   Everything is scoped to `.barber-theme`, so nothing here touches a screen
+   that has not been reviewed against the references. Today the public pages
+   use it (`.public-shell barber-theme`); the admin agenda (1.png) can opt in
+   by adding the class to its own shell. The Laravel cancellation pages
+   cannot load this file (their CSP only allows inline styles), so
+   resources/views/cancellation/layout.blade.php repeats the same tokens. */
+
+.barber-theme {
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --surface: #fbf6ec;
+  --surface-raised: #fffdf8;
+  --surface-muted: #f1e8d6;
+  --surface-danger: #f6dfdc;
+  --surface-success: #dcebd6;
+  --border-soft: #e2d5bc;
+  --border-strong: #b9a98c;
+  --text-muted: #5f574b;
+  --text-on-dark: #fffaf0;
+  --color-danger: #a3172c;
+  --color-success: #2f6b3a;
+  --shadow-soft: 0 1px 2px rgba(28, 26, 23, 0.06), 0 6px 18px rgba(28, 26, 23, 0.07);
+  --shadow-action: 0 2px 6px rgba(76, 14, 24, 0.25);
+  --radius: 10px;
+  --radius-control: 8px;
+
+  font-family: var(--font-body);
+  color: var(--color-black);
+  line-height: 1.5;
+}
+
+.barber-theme :is(h1, h2, h3) {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* ---- Buttons: primary (one per view), secondary, danger --------------- */
+
+.barber-theme :is(.primary-button, .secondary-button, .danger-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 2.9rem;
+  padding: 0.6rem 1.5rem;
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 700;
+  line-height: 1.2;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.barber-theme .primary-button {
+  background: var(--color-maroon);
+  color: var(--text-on-dark);
+  border: 1px solid var(--color-maroon-dark);
+  box-shadow: var(--shadow-action);
+}
+
+.barber-theme .primary-button:hover:not(:disabled) {
+  background: var(--color-maroon-dark);
+}
+
+.barber-theme .secondary-button {
+  background: var(--surface-raised);
+  color: var(--color-black);
+  border: 1px solid var(--border-strong);
+}
+
+.barber-theme .secondary-button:hover:not(:disabled) {
+  border-color: var(--color-maroon);
+  color: var(--color-maroon-dark);
+}
+
+.barber-theme .danger-button {
+  background: var(--surface-raised);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger);
+}
+
+.barber-theme .danger-button:hover:not(:disabled) {
+  background: var(--color-danger);
+  color: var(--text-on-dark);
+}
+
+.barber-theme :is(.primary-button, .secondary-button, .danger-button):disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.barber-theme :is(a, button, input, select, textarea):focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+/* ---- Icon bubble (summary rows, cards, status headers) ----------------- */
+
+.barber-theme .icon-bubble {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  color: var(--color-black);
+}
+
+.barber-theme .icon-bubble--large {
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.barber-theme .icon-bubble--danger {
+  background: var(--surface-danger);
+  color: var(--color-maroon);
+}
+
+.barber-theme .icon-bubble--success {
+  background: var(--surface-success);
+  color: var(--color-success);
+}
+
+/* ---- Card ---------------------------------------------------------------- */
+
+.barber-theme .theme-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.barber-theme .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .barber-theme * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

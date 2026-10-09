@@ -55,14 +55,16 @@ class PublicCancellationTest extends TestCase
         $response = $this->get($this->linkFor($this->appointment));
 
         $response->assertOk()
-            ->assertSee('Cancelar reserva')
+            ->assertSee('Cancelar reserva?')
             ->assertSee('Corte degradê')          // snapshot, not the current service name
             ->assertDontSee('Corte atual')
+            ->assertSee('45 min · R$ 40,00')
             ->assertSee('Rafael Almeida')
-            ->assertSee('terça-feira, 03 de novembro de 2026')
-            ->assertSee('10:00–10:45')
+            ->assertSee('3 de novembro de 2026 · 10:00–10:45')
+            ->assertSee('Terça-feira')
             ->assertSee($this->appointment->public_id)
             ->assertSee('Confirmar cancelamento')
+            ->assertSee('<a class="button button--secondary" href="/">Manter reserva</a>', false)
             ->assertDontSee('Cliente Sigiloso')
             ->assertDontSee('sigilo@example.com')
             ->assertDontSee('+5511912345678');
@@ -94,8 +96,11 @@ class PublicCancellationTest extends TestCase
         $this->withHeaders(['Accept-Language' => 'en'])
             ->get($this->linkFor($this->appointment))
             ->assertOk()
-            ->assertSee('Cancel booking')
-            ->assertSee('Tuesday, November 3, 2026')
+            ->assertSee('Cancel this booking?')
+            ->assertSee('45 min · R$40.00')
+            ->assertSee('November 3, 2026 · 10:00–10:45')
+            ->assertSee('Tuesday')
+            ->assertSee('Keep booking')
             ->assertSee('Confirm cancellation');
     }
 
@@ -115,7 +120,9 @@ class PublicCancellationTest extends TestCase
 
         $this->withSession(['cancellation_result' => 'cancelled'])->get($link)
             ->assertOk()
-            ->assertSee('Reserva cancelada. O horário foi liberado.')
+            ->assertSee('Reserva cancelada')
+            ->assertSee('O horário foi liberado.')
+            ->assertSee('<a class="button button--primary" href="/agendar">Agendar novamente</a>', false)
             ->assertDontSee('Confirmar cancelamento');
     }
 
