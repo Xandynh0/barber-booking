@@ -64,6 +64,8 @@ return [
         'starts_at' => 'início',
         'ends_at' => 'fim',
         'reason' => 'motivo',
+        'service_id' => 'serviço',
+        'date' => 'data',
         'email' => 'e-mail',
         'password' => 'senha',
         'days' => 'dias',

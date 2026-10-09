@@ -25,6 +25,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureAdminLoginRateLimiting();
+        $this->configurePublicAvailabilityRateLimiting();
     }
 
     /**
@@ -43,6 +44,20 @@ class AppServiceProvider extends ServiceProvider
 
         RateLimiter::for('admin-login-ip', function (Request $request) {
             return Limit::perMinute((int) config('admin_auth.login_throttle.per_ip'))
+                ->by($request->ip())
+                ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
+        });
+    }
+
+    /**
+     * GET /api/v1/public/availability is unauthenticated, so it gets a
+     * per-IP ceiling: generous for a person browsing dates, low enough to
+     * stop scraping the whole horizon in a loop.
+     */
+    private function configurePublicAvailabilityRateLimiting(): void
+    {
+        RateLimiter::for('public-availability', function (Request $request) {
+            return Limit::perMinute(60)
                 ->by($request->ip())
                 ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
         });

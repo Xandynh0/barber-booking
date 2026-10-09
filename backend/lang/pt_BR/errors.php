@@ -23,4 +23,7 @@ return [
     'period_end_before_start' => 'O fim deve ser depois do início.',
     'periods_overlap' => 'Períodos do mesmo dia não podem se sobrepor.',
     'service_unavailable' => 'Serviço indisponível no momento.',
+    'availability_service_unavailable' => 'Serviço indisponível para agendamento.',
+    'availability_professional_unavailable' => 'Profissional indisponível para agendamento.',
+    'availability_service_not_offered' => 'Este profissional não realiza o serviço escolhido.',
 ];
