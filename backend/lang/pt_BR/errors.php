@@ -26,4 +26,11 @@ return [
     'availability_service_unavailable' => 'Serviço indisponível para agendamento.',
     'availability_professional_unavailable' => 'Profissional indisponível para agendamento.',
     'availability_service_not_offered' => 'Este profissional não realiza o serviço escolhido.',
+    'slot_unavailable' => 'Esse horário não está mais disponível. Escolha outro.',
+    'contact_limit_reached' => 'Há um limite de reservas futuras por contato. Para agendar mais, fale com a barbearia.',
+    'idempotency_key_reused' => 'Esta chave de idempotência já foi usada em outra reserva. Gere uma nova chave para uma nova reserva.',
+    'invalid_phone' => 'Informe um telefone válido com DDD (ex.: +55 11 99999-9999).',
+    'starts_at_needs_offset' => 'Informe o início com data, hora e fuso horário (ISO 8601, ex.: 2026-11-03T10:00:00-03:00).',
+    'appointment_conflict_block' => 'Já existem reservas confirmadas neste intervalo: :list. Cancele-as antes de bloquear o horário.',
+    'appointment_conflict_working_hours' => 'O novo expediente deixaria reservas futuras fora do horário: :list. Cancele-as antes de reduzir o expediente.',
 ];

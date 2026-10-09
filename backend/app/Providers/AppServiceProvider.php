@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
     }
 
     /**
+     * The public routes are unauthenticated, so they get per-IP ceilings.
      * GET /api/v1/public/availability is unauthenticated, so it gets a
      * per-IP ceiling: generous for a person browsing dates, low enough to
      * stop scraping the whole horizon in a loop.
@@ -58,6 +59,16 @@ class AppServiceProvider extends ServiceProvider
     {
         RateLimiter::for('public-availability', function (Request $request) {
             return Limit::perMinute(60)
+                ->by($request->ip())
+                ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
+        });
+
+        // Creating a reservation is the expensive, abuse-prone path (it takes
+        // the global lock): far tighter than browsing availability. Replays
+        // of the same Idempotency-Key count too — a client retrying more
+        // than this per minute is misbehaving anyway.
+        RateLimiter::for('public-appointments', function (Request $request) {
+            return Limit::perMinute(10)
                 ->by($request->ip())
                 ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
         });

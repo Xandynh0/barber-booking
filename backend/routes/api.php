@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\ServiceController;
 use App\Http\Controllers\Admin\WorkingHourController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\HealthController;
+use App\Http\Controllers\PublicAppointmentController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class);
@@ -16,6 +17,9 @@ Route::prefix('v1/public')->name('public.')->group(function () {
     Route::get('/availability', [AvailabilityController::class, 'forPublic'])
         ->middleware('throttle:public-availability')
         ->name('availability');
+    Route::post('/appointments', [PublicAppointmentController::class, 'store'])
+        ->middleware('throttle:public-appointments')
+        ->name('appointments.store');
 });
 
 Route::prefix('v1/admin')->name('admin.')->group(function () {

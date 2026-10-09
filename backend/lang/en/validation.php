@@ -18,6 +18,10 @@ return [
 
     'attributes' => [
         'service_ids.*' => 'service',
+        'idempotency_key' => 'idempotency key',
+        'customer_name' => 'name',
+        'customer_email' => 'email',
+        'customer_phone' => 'phone',
         'days.*.weekday' => 'weekday',
         'days.*.periods' => 'periods',
         'days.*.periods.*.start_time' => 'start time',
