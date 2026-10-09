@@ -489,4 +489,63 @@ Regras: as da seção 5, com as decisões desta entrega:
 
 Diferenças em relação à seção 11: a resposta vem dentro de `data`, como nos demais endpoints já implementados, e foi adicionada a rota admin, que a seção 11 não listava.
 
-A consulta é uma sugestão sem lock. A garantia contra reservas simultâneas depende da revalidação transacional na criação da reserva, ainda não implementada.
+A consulta é uma sugestão sem lock. A garantia contra reservas simultâneas está na criação da reserva (seção 17), que reaplica o mesmo motor dentro da transação.
+
+## 17. Contratos implementados — Criação pública de reservas
+
+`POST /api/v1/public/appointments`. Sem login. Rate limit: 10 por minuto por IP.
+
+Header obrigatório: `Idempotency-Key`, de 8 a 255 caracteres `[A-Za-z0-9._:-]`. Uma chave representa uma intenção de reserva (seção 11).
+
+Corpo (os únicos campos lidos; qualquer outro — `status`, `source`, `ends_at`, preço, snapshots, `public_id` — é ignorado):
+
+```json
+{
+  "service_id": 1,
+  "professional_id": 2,
+  "starts_at": "2026-11-03T10:00:00-03:00",
+  "customer_name": "Cliente Demonstração",
+  "customer_email": "cliente@example.com",
+  "customer_phone": "+5511999999999"
+}
+```
+
+- `starts_at`: ISO 8601 **com offset explícito**, precisa ser um dos horários que o motor oferece no contexto público.
+- `customer_name`: obrigatório, até 120 caracteres.
+- `customer_email`: obrigatório, e-mail RFC, até 254 caracteres; gravado com trim e minúsculas.
+- `customer_phone`: obrigatório; gravado em E.164 (10 ou 11 dígitos sem prefixo são tratados como número brasileiro com DDD).
+
+`201` (criada) ou `200` (replay idempotente, mesmo corpo, nenhuma reserva nova):
+
+```json
+{
+  "data": {
+    "public_id": "01k9...",
+    "status": "confirmed",
+    "starts_at": "2026-11-03T13:00:00+00:00",
+    "ends_at": "2026-11-03T13:45:00+00:00",
+    "timezone": "America/Sao_Paulo",
+    "service": { "id": 1, "name": "Corte degradê", "duration_minutes": 45, "price": "55.90" },
+    "professional": { "id": 2, "name": "Rafael Almeida" },
+    "customer_name": "Cliente Demonstração"
+  }
+}
+```
+
+`service` vem dos snapshots gravados na criação. E-mail e telefone não são devolvidos.
+
+| HTTP | `error.code` | Quando |
+| --- | --- | --- |
+| 422 | `VALIDATION_ERROR` | Formato inválido; `Idempotency-Key` ausente ou inválido; serviço inexistente/inativo; profissional inexistente/inativo ou sem o serviço |
+| 409 | `SLOT_UNAVAILABLE` | O horário não está entre os que o motor oferece agora: ocupado (inclusive por uma requisição concorrente), bloqueado, fora do expediente ou da grade, no passado, antes da antecedência mínima ou fora do horizonte |
+| 409 | `CONTACT_LIMIT_REACHED` | O e-mail ou o telefone já tem `max_active_per_contact` reservas futuras confirmadas (contadas separadamente, incluindo reservas do admin) |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | A chave já foi usada com outro payload |
+| 429 | `RATE_LIMITED` | Acima do limite |
+
+Proteção contra double booking: a transação trava `business_settings` (primeira instrução), depois o profissional, verifica idempotência, revalida com o motor de disponibilidade, confere o teto e só então insere (seção 5). Comprovado com duas conexões MySQL simultâneas.
+
+Diferenças em relação ao planejado:
+
+- A resposta ainda não tem `notification_status`: o e-mail de confirmação, a tabela `appointment_notifications` e o cancelamento por link assinado (seção 6) ficam para a próxima entrega.
+- A resposta vem dentro de `data`, como nos demais endpoints.
+- Regras da seção 7 implementadas para bloqueios e expediente, com `409 APPOINTMENT_CONFLICT` e `error.conflicts`; ver `docs/desenvolvimento.md`.

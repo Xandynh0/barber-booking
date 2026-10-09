@@ -244,7 +244,7 @@ Isso é o que permite testar esta funcionalidade de qualquer fuso horário (nave
 
 ## Motor de disponibilidade
 
-Calcula os horários livres de um profissional para um serviço numa data. É uma **sugestão de leitura**: não grava nada e não usa lock. A garantia de que duas reservas simultâneas não ocupam o mesmo intervalo **ainda não existe** — ela dependerá de revalidar a disponibilidade dentro da transação de criação da reserva (lock de `business_settings`, depois do profissional; `docs/planejamento-barbearia-mvp.md`, seção 5), que é da entrega de agendamento público.
+Calcula os horários livres de um profissional para um serviço numa data. A consulta (`GET .../availability`) é uma **sugestão de leitura**: não grava nada e não usa lock. A garantia de que duas reservas simultâneas não ocupam o mesmo intervalo **está no POST de criação** — ver "Criação pública de reservas" abaixo —, que chama o mesmo motor dentro da transação, depois dos locks.
 
 - Código: `app/Services/Availability/AvailabilityEngine.php` (motor único) e `AvailabilityContext.php` (`Public`/`Admin`). As duas rotas usam o mesmo `AvailabilityController`, cada uma presa a um método que fixa o contexto; não existe parâmetro de contexto. A rota admin fica atrás de `auth:sanctum`.
 - Contrato completo: `docs/planejamento-barbearia-mvp.md`, seção 16.
@@ -269,7 +269,7 @@ Calcula os horários livres de um profissional para um serviço numa data. É um
 
 ### Tabela `appointments`
 
-Criada nesta entrega com a estrutura aprovada (`docs/planejamento-barbearia-mvp.md`, seção 4), mas **nada grava nela ainda**: o motor só a lê como tempo ocupado. `public_id` é ULID (`HasUlids` apontado para a coluna, a chave primária continua numérica); FKs de profissional e serviço com `restrictOnDelete`; índices `(professional_id, starts_at)`, `(customer_email, status, starts_at)`, `(customer_phone, status, starts_at)`; `public_id` e `idempotency_key` únicos. Status usados: `confirmed` e `cancelled`.
+Criada nesta entrega com a estrutura aprovada (`docs/planejamento-barbearia-mvp.md`, seção 4), e gravada pelo POST de criação pública (ver "Criação pública de reservas"); o motor a lê como tempo ocupado. `public_id` é ULID (`HasUlids` apontado para a coluna, a chave primária continua numérica); FKs de profissional e serviço com `restrictOnDelete`; índices `(professional_id, starts_at)`, `(customer_email, status, starts_at)`, `(customer_phone, status, starts_at)`; `public_id` e `idempotency_key` únicos. Status usados: `confirmed` e `cancelled`.
 
 Consequência para o importador de dados de teste: `import:test-data --remove` agora recusa remover qualquer coisa se alguma reserva usa um profissional ou serviço da importação (as FKs também impediriam, mas com um erro de banco em vez de uma explicação). Essa verificação não tem teste automatizado: o comando grava o manifesto num caminho fixo do `storage/` real, que um teste sobrescreveria.
 
@@ -282,6 +282,59 @@ curl -s "http://localhost:8080/api/v1/public/availability?service_id=1&professio
 ```
 
 Os dados de teste importados não têm expediente (o pacote não cria). Para ver horários, cadastre expediente em `/admin/expediente` para um profissional ativo vinculado ao serviço.
+
+## Criação pública de reservas
+
+`POST /api/v1/public/appointments` cria uma reserva confirmada, sem conta nem login. Contrato completo: `docs/planejamento-barbearia-mvp.md`, seção 17.
+
+- Código: `app/Services/Booking/AppointmentBooker.php` (transação e regras), `StorePublicAppointmentRequest` (formato), `PublicAppointmentController` (resposta), `ContactNormalizer` (e-mail e telefone), `AgendaConflicts` (regras da seção 7 para bloqueios e expediente) e `App\Exceptions\BusinessConflictException` (erros `409`).
+
+### Fluxo dentro da transação (proteção contra double booking)
+
+A proteção contra duas reservas sobrepostas acontece **no POST, dentro de uma transação MySQL**, nesta ordem fixa:
+
+1. `SELECT ... FOR UPDATE` no registro único de `business_settings` — **primeira instrução da transação**.
+2. `SELECT ... FOR UPDATE` no profissional.
+3. Idempotência: mesma chave e mesmo fingerprint devolvem a reserva existente (`200`); mesma chave com outro payload, `409 IDEMPOTENCY_KEY_REUSED`.
+4. Revalidação com dados atuais: serviço e profissional ativos e vinculados (`422`) e `AvailabilityEngine::isSlotAvailable()` no contexto público (`409 SLOT_UNAVAILABLE`). É o mesmo cálculo do GET — expediente, duração, grade, bloqueios, reservas, antecedência, horizonte, fuso —, sem lógica repetida.
+5. Teto por contato (`409 CONTACT_LIMIT_REACHED`).
+6. `INSERT` com fim, snapshots, status e origem definidos pelo servidor; commit.
+
+Por que o lock precisa ser a primeira instrução: no InnoDB em `REPEATABLE READ`, a "foto" de leitura da transação é criada na primeira leitura comum (sem lock). Se houvesse uma leitura comum antes do lock, a transação que esperou o lock continuaria lendo a foto antiga e não veria a reserva que a outra acabou de gravar. Isso foi comprovado com o teste de concorrência (ver "Testes de criação pública de reservas").
+
+Todos os caminhos que alteram a agenda seguem a mesma ordem: lock de `business_settings`, depois do(s) profissional(is) em ordem de ID. Isso vale para a criação de reserva, bloqueios e expediente; nesta entrega, bloqueios e expediente passaram a travar também o profissional. Com uma ordem única, duas escritas nunca seguram os locks em ordens opostas. Deadlock e timeout de lock são repetidos até 3 vezes pelo `DB::transaction()`.
+
+O lock global serializa todas as escritas da agenda da barbearia. É a escolha documentada para o MVP (seção 5 do planejamento) e é o que garante o teto por contato mesmo entre profissionais diferentes.
+
+### Decisões
+
+- **Telefone em E.164 sem biblioteca nova:** caracteres de formatação são removidos; `+` ou `00` no início indicam número internacional; 10 ou 11 dígitos sem prefixo são tratados como número brasileiro com DDD e recebem `+55`. Qualquer outro formato é recusado com `422`, sem palpite. Não é uma validação completa de plano de numeração.
+- **E-mail:** trim e minúsculas, sem remover pontos ou aliases (planejamento, seção 1).
+- **`starts_at` exige offset explícito** (`Z` ou `±hh:mm`): uma hora local sem fuso seria ambígua.
+- **Horário fora da grade, do expediente, do horizonte ou no passado** responde `409 SLOT_UNAVAILABLE`, o mesmo código de "alguém reservou antes". Para a interface, a ação é a mesma: atualizar os horários e manter os dados do cliente.
+- **Fingerprint:** SHA-256 de origem (`public`), serviço, profissional, início em UTC e contatos canônicos. A chave fica presa à intenção e ao contexto, então não pode ser reaproveitada com outro payload nem entre público e admin.
+- **Resposta sem e-mail e telefone**, com o serviço descrito pelos snapshots.
+- **Rate limit:** 10 POSTs por minuto por IP (`throttle:public-appointments`); replays contam.
+- **Sem e-mail de confirmação nesta entrega:** a tabela `appointment_notifications`, o envio e o link de cancelamento ficam para a próxima. Por isso a resposta ainda não tem `notification_status`.
+
+### Regras da seção 7 (agora que reservas existem)
+
+- **Bloqueio sobre reserva:** criar um bloqueio, individual ou fechamento da barbearia, que cruze uma reserva não cancelada é recusado com `409 APPOINTMENT_CONFLICT`. A mensagem lista os conflitos com data e hora no fuso da barbearia e o array `error.conflicts` traz `public_id`, profissional, cliente e intervalo. Nada é cancelado e nenhum bloqueio é criado.
+- **Redução de expediente:** um `PUT` de expediente que deixe uma reserva futura confirmada fora de qualquer período do dia é recusado com `409 APPOINTMENT_CONFLICT`, e a alteração inteira é desfeita.
+- O texto da seção 7 fala em "reserva confirmada" para bloqueios e "reserva futura confirmada" para expediente. Por isso, bloqueios consideram qualquer reserva não cancelada, inclusive passada, e o expediente só considera reservas futuras.
+- **Limitação:** a mensagem orienta a cancelar a reserva antes, mas ainda **não existe endpoint de cancelamento** (nem público por link, nem admin). Até lá, um bloqueio sobre uma reserva só pode ser criado depois que ela for cancelada por outro meio.
+- O frontend já mostra a mensagem traduzida que vem do backend (`error.message`). A lista estruturada em `error.conflicts` ainda não tem tela própria.
+
+### Testando à mão
+
+```bash
+curl -s -X POST http://localhost:8080/api/v1/public/appointments \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -H "Idempotency-Key: $(uuidgen)" \
+  -d '{"service_id":1,"professional_id":1,"starts_at":"2026-11-03T10:00:00-03:00","customer_name":"Cliente","customer_email":"cliente@example.com","customer_phone":"(11) 99999-0000"}'
+```
+
+Para conseguir um `201`, o profissional precisa ter expediente cadastrado para o dia; os dados de teste importados não têm. Repetir o mesmo comando com a mesma chave devolve `200` com a mesma reserva; com outra chave, `409 SLOT_UNAVAILABLE`.
 
 ## Importação de dados de teste fictícios
 
@@ -409,7 +462,42 @@ Verificação dos próprios testes: cinco defeitos introduzidos de propósito no
 
 Resultado: **111 passed** no backend (83 anteriores + 28), `vendor/bin/pint --format agent` sem alterações.
 
-**O que estes testes não provam:** prevenção de reservas simultâneas. Não há criação de reserva, então não há corrida a testar; o teste de concorrência com duas conexões MySQL disputando o mesmo intervalo entra junto da criação de reservas.
+**O que estes testes não provam:** prevenção de reservas simultâneas — isso é responsabilidade do POST de criação, coberto por `PublicAppointmentConcurrencyTest` (abaixo).
+
+### Testes de criação pública de reservas
+
+- `tests/Feature/PublicAppointmentTest.php` (29 testes, MySQL real, relógio controlado):
+  - criação válida, `public_id` ULID, status `confirmed`, origem `public` e fim calculado;
+  - snapshots preservados depois de editar o serviço;
+  - contatos canônicos;
+  - campos internos enviados pelo cliente ignorados;
+  - reserva sumindo da disponibilidade;
+  - idempotência (replay `200`, chave reaproveitada `409`, header obrigatório e validado);
+  - validação de payload, telefone E.164 e `starts_at` com offset;
+  - mesmo instante com outro offset;
+  - serviço ou profissional inativo, inexistente ou sem vínculo;
+  - antes da abertura, depois do fechamento, atravessando o almoço, dentro do almoço e fora da grade;
+  - dia sem expediente;
+  - bloqueio e suas bordas;
+  - reserva existente (mesmo início, sobreposição parcial, adjacentes antes e depois);
+  - reserva cancelada e reserva de outro profissional;
+  - horário ocupado entre o GET e o POST;
+  - antecedência exata e um segundo depois;
+  - passado;
+  - último dia do horizonte e o seguinte;
+  - horizonte pela data local;
+  - teto por contato (e-mail e telefone separados, reserva do admin contando, canceladas e passadas não contando);
+  - mensagens em pt-BR e en;
+  - erro sem dados internos;
+  - rate limit.
+- `tests/Feature/PublicAppointmentConcurrencyTest.php` (6 testes): **duas conexões MySQL independentes**, cada uma num processo PHP próprio (`tests/Support/post-public-appointment.php`) que sobe a aplicação e passa pelo kernel HTTP real.
+  - Uma terceira conexão segura o lock de `business_settings`; o teste espera o MySQL mostrar as **duas** tentativas bloqueadas nesse lock (`information_schema.processlist`) e só então o solta.
+  - Cenários: mesmo horário e sobreposição parcial (exatamente um `201` e um `409 SLOT_UNAVAILABLE`, uma linha no banco); adjacentes e profissionais diferentes (dois `201`); teto por contato entre profissionais diferentes (um `201` e um `409 CONTACT_LIMIT_REACHED`); duplo clique com a mesma chave (um `201` e um `200` com o mesmo `public_id`).
+  - Os dados ficam gravados (`DatabaseTruncation`, não `RefreshDatabase`, porque linhas dentro de uma transação de teste seriam invisíveis aos outros processos), e as tabelas são truncadas de novo no `tearDown`.
+- Verificação do próprio teste de concorrência: dois defeitos introduzidos de propósito no `AppointmentBooker`, mantendo os locks, produziram **double booking real** (dois `201` para o mesmo profissional e horário) e o teste falhou nos dois casos: (1) uma leitura comum antes do lock, a armadilha do `REPEATABLE READ` descrita acima; (2) revalidação fora da transação. O booker foi restaurado e conferido byte a byte.
+- `tests/Feature/Admin/AgendaConflictTest.php` (9 testes): regras da seção 7 para bloqueios (individual, fechamento, adjacente, sobre reserva cancelada, outro profissional, mensagem em pt-BR e en) e para expediente (redução recusada e desfeita, dia inteiro removido, alteração que ainda contém a reserva, reservas passadas e canceladas não impedem).
+
+Resultado: **155 passed** no backend (111 anteriores + 44 novos). O teste de concorrência passou em 5 rodadas seguidas. `vendor/bin/pint --format agent` passou.
 
 ## Internacionalização (PT-BR / English)
 
@@ -520,11 +608,12 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 ## Limitações desta etapa
 
-- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa e o **motor de disponibilidade** (consulta pública e admin) estão implementados. Criação de reservas, catálogo público, telas de agendamento, cancelamento e notificações ainda não existem. A tabela `appointments` existe, mas nada grava nela.
-- **Pendente para a criação de reservas:** revalidar a disponibilidade dentro da transação, com lock de `business_settings` e depois do profissional; idempotência; teto por contato; teste de concorrência com duas conexões MySQL. Também as regras da seção 7 do planejamento que passam a valer quando houver reservas: recusar bloqueio sobre reserva confirmada e recusar redução de expediente que exclua reserva futura.
-- O motor não tem tela ainda: a interface pública de agendamento e o uso no painel ficam para as próximas entregas.
+- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade** e a **criação pública de reservas** (`POST /api/v1/public/appointments`, com proteção contra double booking na transação) estão implementados. Catálogo público, telas de agendamento, reserva pelo admin, cancelamento e notificações ainda não existem.
+- **Pendente:** e-mail de confirmação (`appointment_notifications`, envio fora da transação, varredura de pendências) e cancelamento por link assinado (seção 6), reserva pelo admin (incluindo "Atender agora"), cancelamento pelo admin e telas públicas de agendamento. Sem cancelamento, as recusas da seção 7 ainda não têm saída pela interface.
+- O motor e a criação de reservas ainda não têm tela: a interface pública de agendamento e o uso no painel ficam para as próximas entregas.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
-- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da criação de reservas (a consulta de disponibilidade desta entrega é só leitura e não tem corrida a testar) — o lock de `business_settings` usado nos cadastros, expediente e bloqueios desta e da entrega anterior não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
+- Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
+- **Diferença de 20 assertions entre Docker e CI (investigada):** o Laravel lê variáveis de ambiente primeiro de `$_SERVER` e depois de `$_ENV` (`Illuminate\Support\Env`), e o `<env force="true">` do PHPUnit só escreve em `putenv`/`$_ENV`. No Docker, o `env_file` do compose transforma `ADMIN_LOGIN_THROTTLE_PER_EMAIL=5` e `PER_IP=20` do `.env` em variáveis de ambiente reais, que vencem os valores forçados do `phpunit.xml` (2 e 3). Os dois testes de throttle do login repetem tentativas até o limite e fazem 20 assertions a mais no Docker. Reproduzido: rodando `phpunit` no mesmo container com ambiente limpo (`env -i`, só as variáveis de banco), a suíte dá exatamente as assertions da CI, e o JUnit aponta só `AuthTest::test_login_throttles_by_ip_and_normalized_email` (13 contra 10) e `test_login_throttles_by_ip_alone_across_different_emails` (28 contra 11). Os testes passam nos dois ambientes, mas localmente exercitam limites diferentes da CI. Correção possível, pendente e fora deste escopo: usar `<server>` em vez de `<env>` no `phpunit.xml` para essas variáveis, ou tirá-las do `env_file` do container.
 - Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas de uma entrega anterior) ainda **não** foram confirmados visualmente em navegador. A internacionalização (PT-BR/English, esta entrega) foi verificada via `curl` contra o proxy real com `Accept-Language: pt-BR`/`en` (mensagens de erro/validação traduzidas corretamente) e via teste de integração automatizado (`App.test.jsx`, troca de idioma pelo router real nas três áreas), mas a troca de idioma pelo botão **não** foi confirmada visualmente em navegador. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual abaixo.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.
