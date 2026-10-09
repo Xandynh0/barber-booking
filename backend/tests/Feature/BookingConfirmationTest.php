@@ -15,6 +15,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
+use Symfony\Component\Process\Process;
 use Tests\TestCase;
 
 /**
@@ -192,6 +193,47 @@ class BookingConfirmationTest extends TestCase
         $this->assertSame(1, $notification->attempts);
         $this->assertNotEmpty($notification->last_error_code);
         $this->assertStringNotContainsString('@', $notification->last_error_code);
+    }
+
+    public function test_a_smtp_server_that_never_answers_does_not_hold_the_booking_request(): void
+    {
+        // Regression: with no SMTP timeout the request waited for PHP's
+        // default_socket_timeout (60s) and the proxy answered 504 although the
+        // reservation was committed. This server accepts the connection and
+        // never sends the SMTP greeting — exactly what a hung provider does.
+        $server = new Process([PHP_BINARY, '-r', '
+            $socket = stream_socket_server("tcp://127.0.0.1:0", $errno, $errstr);
+            fwrite(STDOUT, stream_socket_get_name($socket, false).PHP_EOL);
+            $clients = [];
+            while (true) { if ($client = @stream_socket_accept($socket, 1)) { $clients[] = $client; } }
+        ']);
+        $server->start();
+        $address = null;
+        $server->waitUntil(function (string $type, string $output) use (&$address) {
+            $address = trim($output);
+
+            return $address !== '';
+        });
+        [, $port] = explode(':', $address);
+
+        try {
+            config([
+                'mail.default' => 'smtp',
+                'mail.mailers.smtp.host' => '127.0.0.1',
+                'mail.mailers.smtp.port' => (int) $port,
+            ]);
+            $this->assertSame(5, config('mail.mailers.smtp.timeout'));
+
+            $started = microtime(true);
+            $this->book()->assertCreated()->assertJsonPath('data.notification_status', 'failed');
+            $elapsed = microtime(true) - $started;
+        } finally {
+            $server->stop(0);
+        }
+
+        $this->assertLessThan(20, $elapsed, 'The booking request must not wait for a hung SMTP server.');
+        $this->assertDatabaseCount('appointments', 1);
+        $this->assertSame(AppointmentNotification::STATUS_FAILED, AppointmentNotification::query()->sole()->status);
     }
 
     // --- Recovery sweep -----------------------------------------------------
