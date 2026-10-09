@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\AgendaController;
+use App\Http\Controllers\Admin\AppointmentController;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\BusinessSettingsController;
 use App\Http\Controllers\Admin\ProfessionalController;
@@ -62,5 +64,17 @@ Route::prefix('v1/admin')->name('admin.')->group(function () {
         Route::get('/business-settings', [BusinessSettingsController::class, 'show'])->name('business-settings.show');
 
         Route::get('/availability', [AvailabilityController::class, 'forAdmin'])->name('availability');
+
+        Route::get('/agenda', [AgendaController::class, 'index'])->name('agenda');
+        Route::get('/appointments/{appointment:public_id}', [AppointmentController::class, 'show'])->name('appointments.show');
+        Route::middleware('throttle:admin-agenda-writes')->group(function () {
+            Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');
+            Route::post('/appointments/{appointment:public_id}/cancel', [AppointmentController::class, 'cancel'])->name('appointments.cancel');
+            Route::post('/appointments/{appointment:public_id}/complete', [AppointmentController::class, 'complete'])->name('appointments.complete');
+            Route::post('/appointments/{appointment:public_id}/no-show', [AppointmentController::class, 'noShow'])->name('appointments.no-show');
+        });
+        Route::post('/appointments/{appointment:public_id}/resend-confirmation', [AppointmentController::class, 'resendConfirmation'])
+            ->middleware('throttle:admin-resend-confirmation')
+            ->name('appointments.resend-confirmation');
     });
 });

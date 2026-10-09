@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Creates a public reservation. This is where the guarantee against double
+ * Creates a reservation, public or by the administrator. This is where the guarantee against double
  * booking lives — docs/planejamento-barbearia-mvp.md, seção 5:
  *
  * 1. Lock the single business_settings row. It MUST be the first statement
@@ -42,6 +42,10 @@ use Illuminate\Validation\ValidationException;
 class AppointmentBooker
 {
     private const TRANSACTION_ATTEMPTS = 3;
+
+    public const MODE_SCHEDULED = 'scheduled';
+
+    public const MODE_NOW = 'now';
 
     public function __construct(private readonly AvailabilityEngine $engine) {}
 
@@ -79,36 +83,114 @@ class AppointmentBooker
 
             $this->assertWithinContactLimit($booking['customer_email'], $booking['customer_phone'], (int) $settings->max_active_per_contact);
 
-            $appointment = Appointment::create([
-                'professional_id' => $professional->id,
-                'service_id' => $service->id,
-                'customer_name' => $booking['customer_name'],
-                'customer_email' => $booking['customer_email'],
-                'customer_phone' => $booking['customer_phone'],
-                'starts_at' => $booking['starts_at'],
-                'ends_at' => $booking['starts_at']->addMinutes((int) $service->duration_minutes),
-                'status' => Appointment::STATUS_CONFIRMED,
-                'source' => Appointment::SOURCE_PUBLIC,
-                'service_name_snapshot' => $service->name,
-                'duration_minutes_snapshot' => (int) $service->duration_minutes,
-                'price_snapshot' => (string) $service->price,
-                'idempotency_key' => $idempotencyKey,
-                'request_fingerprint' => $fingerprint,
-            ]);
-
-            // Seção 5, step 5: the confirmation is recorded in the same
-            // transaction (so a rollback leaves no orphan notification) but
-            // only delivered after commit, by ConfirmationNotifier.
-            if ($appointment->customer_email !== null && $appointment->starts_at->isFuture()) {
-                AppointmentNotification::create([
-                    'appointment_id' => $appointment->id,
-                    'kind' => AppointmentNotification::KIND_CONFIRMATION,
-                    'status' => AppointmentNotification::STATUS_PENDING,
-                ]);
-            }
+            $appointment = $this->insert($service, $professional, $booking, $booking['starts_at'], Appointment::SOURCE_PUBLIC, $idempotencyKey, $fingerprint);
 
             return ['appointment' => $appointment, 'replayed' => false];
         }, self::TRANSACTION_ATTEMPTS);
+    }
+
+    /**
+     * Creates a reservation for the authenticated administrator
+     * (docs/planejamento-barbearia-mvp.md, seções 1, 3, 5 e 11). Same
+     * transaction protocol as bookPublic(), with the admin rules:
+     *
+     * - `scheduled`: `starts_at` must be one of the slots the engine offers
+     *   in the admin context — minimum notice ignored, horizon kept (seção
+     *   1: "limite de horizonte permanece para reservas futuras do admin"),
+     *   never in the past, on the 15-minute grid.
+     * - `now` ("Atender agora"): the start is the server's current instant,
+     *   truncated to the minute, taken *inside* the transaction after the
+     *   locks — never sent by the browser, never rounded to the grid. The
+     *   whole service must still fit one working period, with no block or
+     *   reservation in the way; otherwise it is refused with the reason,
+     *   never moved to another time.
+     * - No contact limit; e-mail and phone are optional. Without an e-mail
+     *   no notification is created. A `now` reservation never gets one
+     *   either: its cancellation link would already be expired (seção 6).
+     *
+     * @param  array{mode: string, service_id: int, professional_id: int, starts_at: ?CarbonImmutable, customer_name: string, customer_email: ?string, customer_phone: ?string}  $booking
+     * @return array{appointment: Appointment, replayed: bool}
+     *
+     * @throws BusinessConflictException
+     * @throws ValidationException
+     */
+    public function bookAdmin(array $booking, string $idempotencyKey): array
+    {
+        $fingerprint = $this->fingerprint(Appointment::SOURCE_ADMIN, $booking);
+
+        return DB::transaction(function () use ($booking, $idempotencyKey, $fingerprint) {
+            $settings = BusinessSettings::query()->lockForUpdate()->firstOrFail();
+            $professional = Professional::query()->lockForUpdate()->find($booking['professional_id']);
+
+            $existing = Appointment::query()->where('idempotency_key', $idempotencyKey)->first();
+            if ($existing !== null) {
+                if (! hash_equals($existing->request_fingerprint, $fingerprint)) {
+                    throw BusinessConflictException::idempotencyKeyReused();
+                }
+
+                return ['appointment' => $existing, 'replayed' => true];
+            }
+
+            $service = Service::query()->find($booking['service_id']);
+            $this->assertBookable($service, $professional);
+
+            if ($booking['mode'] === self::MODE_NOW) {
+                $startsAt = CarbonImmutable::now($settings->timezone)->startOfMinute()->utc();
+                $refusal = $this->engine->intervalRefusal($professional, $startsAt, $startsAt->addMinutes((int) $service->duration_minutes));
+                if ($refusal !== null) {
+                    throw BusinessConflictException::slotUnavailableBecause($refusal);
+                }
+            } else {
+                $startsAt = $booking['starts_at'];
+                if (! $this->engine->isSlotAvailable($service, $professional, $startsAt, AvailabilityContext::Admin)) {
+                    throw BusinessConflictException::slotUnavailableBecause(
+                        $this->engine->refusalFor($service, $professional, $startsAt, AvailabilityContext::Admin),
+                    );
+                }
+            }
+
+            $appointment = $this->insert($service, $professional, $booking, $startsAt, Appointment::SOURCE_ADMIN, $idempotencyKey, $fingerprint);
+
+            return ['appointment' => $appointment, 'replayed' => false];
+        }, self::TRANSACTION_ATTEMPTS);
+    }
+
+    /**
+     * Inserts with server-computed end and snapshots. Seção 5, step 5: the
+     * confirmation is recorded in the same transaction (so a rollback
+     * leaves no orphan notification) — only with an e-mail and a future
+     * start — and delivered after commit by ConfirmationNotifier.
+     *
+     * @param  array<string, mixed>  $booking
+     */
+    private function insert(Service $service, Professional $professional, array $booking, CarbonImmutable $startsAt, string $source, string $idempotencyKey, string $fingerprint): Appointment
+    {
+        $appointment = Appointment::create([
+            'professional_id' => $professional->id,
+            'service_id' => $service->id,
+            'customer_name' => $booking['customer_name'],
+            'customer_email' => $booking['customer_email'],
+            'customer_phone' => $booking['customer_phone'],
+            'starts_at' => $startsAt,
+            'ends_at' => $startsAt->addMinutes((int) $service->duration_minutes),
+            'status' => Appointment::STATUS_CONFIRMED,
+            'source' => $source,
+            'service_name_snapshot' => $service->name,
+            'duration_minutes_snapshot' => (int) $service->duration_minutes,
+            'price_snapshot' => (string) $service->price,
+            'idempotency_key' => $idempotencyKey,
+            'request_fingerprint' => $fingerprint,
+        ]);
+
+        if ($appointment->customer_email !== null && $appointment->starts_at->isFuture()) {
+            AppointmentNotification::create([
+                'appointment_id' => $appointment->id,
+                'kind' => AppointmentNotification::KIND_CONFIRMATION,
+                'status' => AppointmentNotification::STATUS_PENDING,
+            ]);
+        }
+
+        return $appointment;
     }
 
     /**
@@ -172,14 +254,23 @@ class AppointmentBooker
      */
     private function fingerprint(string $source, array $booking): string
     {
-        return hash('sha256', json_encode([
+        $intent = [
             'source' => $source,
             'service_id' => (int) $booking['service_id'],
             'professional_id' => (int) $booking['professional_id'],
-            'starts_at' => $booking['starts_at']->utc()->toIso8601String(),
+            'starts_at' => $booking['starts_at']?->utc()->toIso8601String(),
             'customer_name' => $booking['customer_name'],
             'customer_email' => $booking['customer_email'],
             'customer_phone' => $booking['customer_phone'],
-        ], JSON_THROW_ON_ERROR));
+        ];
+
+        // Admin only, so public fingerprints already stored keep matching.
+        // "Atender agora" has no start in the payload: the intent is "now",
+        // and a replay returns the reservation created at that moment.
+        if ($source === Appointment::SOURCE_ADMIN) {
+            $intent['mode'] = $booking['mode'];
+        }
+
+        return hash('sha256', json_encode($intent, JSON_THROW_ON_ERROR));
     }
 }

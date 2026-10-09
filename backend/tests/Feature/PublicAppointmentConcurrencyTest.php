@@ -8,11 +8,10 @@ use App\Models\Professional;
 use App\Models\Service;
 use App\Models\WorkingHour;
 use Carbon\CarbonImmutable;
-use Illuminate\Database\Connection;
 use Illuminate\Foundation\Testing\DatabaseTruncation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use Symfony\Component\Process\Process;
+use Tests\Feature\Concerns\RacesAgendaWrites;
 use Tests\TestCase;
 
 /**
@@ -32,11 +31,9 @@ use Tests\TestCase;
  */
 class PublicAppointmentConcurrencyTest extends TestCase
 {
-    use DatabaseTruncation;
+    use DatabaseTruncation, RacesAgendaWrites;
 
     private const TZ = 'America/Sao_Paulo';
-
-    private const WAIT_FOR_BLOCKED_SECONDS = 30;
 
     private string $date;
 
@@ -166,104 +163,20 @@ class PublicAppointmentConcurrencyTest extends TestCase
         $this->assertSame(1, Appointment::query()->count());
     }
 
-    // --- Race machinery ---------------------------------------------------
+    // --- Race machinery (RacesAgendaWrites) ------------------------------
 
     /**
-     * Holds the business_settings lock on a separate connection, starts both
-     * attempts as separate processes, waits until MySQL shows both blocked
-     * on that lock, then releases it.
-     *
      * @param  array{body: array<string, mixed>, key: string, ip: string}  $first
      * @param  array{body: array<string, mixed>, key: string, ip: string}  $second
      * @return array{0: array{status: int, body: array<string, mixed>}, 1: array{status: int, body: array<string, mixed>}}
      */
     private function race(array $first, array $second): array
     {
-        /** @var Connection $gate */
-        $gate = DB::connection('lock_gate');
-        $gateId = (int) $gate->selectOne('select connection_id() as id')->id;
-        $gate->beginTransaction();
-        $gate->select('select id from business_settings for update');
-
-        $processes = [$this->attempt($first), $this->attempt($second)];
-        foreach ($processes as $process) {
-            $process->start();
-        }
-
-        try {
-            $this->waitUntilBlockedOnTheLock(2, $gateId, $processes);
-        } finally {
-            $gate->commit();
-        }
-
-        return array_map(function (Process $process) {
-            $process->wait();
-            $this->assertTrue($process->isSuccessful(), 'Attempt process failed: '.$process->getErrorOutput().$process->getOutput());
-
-            return json_decode($process->getOutput(), true, flags: JSON_THROW_ON_ERROR);
-        }, $processes);
-    }
-
-    /**
-     * @param  array{body: array<string, mixed>, key: string, ip: string}  $attempt
-     */
-    private function attempt(array $attempt): Process
-    {
-        $mysql = config('database.connections.mysql');
-
-        return new Process(
-            [PHP_BINARY, base_path('tests/Support/post-public-appointment.php'), json_encode($attempt['body']), $attempt['key'], $attempt['ip']],
-            base_path(),
-            [
-                // Real environment variables win over .env (and over anything
-                // phpunit.xml sets), so the child is pinned to this test's
-                // database and to side-effect-free drivers.
-                'APP_ENV' => 'testing',
-                'DB_CONNECTION' => 'mysql',
-                'DB_HOST' => (string) $mysql['host'],
-                'DB_PORT' => (string) $mysql['port'],
-                'DB_TEST_DATABASE' => (string) $mysql['database'],
-                'DB_USERNAME' => (string) $mysql['username'],
-                'DB_PASSWORD' => (string) $mysql['password'],
-                'CACHE_STORE' => 'array',
-                'SESSION_DRIVER' => 'array',
-                'QUEUE_CONNECTION' => 'sync',
-                'MAIL_MAILER' => 'array',
-                'LOG_CHANNEL' => 'stderr',
-            ],
-            timeout: 120,
+        return $this->raceScripts(
+            'post-public-appointment.php',
+            [json_encode($first['body']), $first['key'], $first['ip']],
+            [json_encode($second['body']), $second['key'], $second['ip']],
         );
-    }
-
-    /**
-     * @param  array<int, Process>  $processes
-     */
-    private function waitUntilBlockedOnTheLock(int $expected, int $gateId, array $processes): void
-    {
-        $deadline = microtime(true) + self::WAIT_FOR_BLOCKED_SECONDS;
-
-        do {
-            $blocked = (int) DB::selectOne(
-                "select count(*) as total from information_schema.processlist
-                 where db = database() and id not in (connection_id(), ?)
-                 and info like 'select % from `business_settings` % for update'",
-                [$gateId],
-            )->total;
-
-            if ($blocked >= $expected) {
-                return;
-            }
-
-            foreach ($processes as $process) {
-                if (! $process->isRunning()) {
-                    $this->fail('An attempt finished before reaching the lock: '.$process->getErrorOutput().$process->getOutput());
-                }
-            }
-
-            usleep(50_000);
-        } while (microtime(true) < $deadline);
-
-        $this->fail("Expected {$expected} attempts blocked on the business_settings lock, saw {$blocked}.");
     }
 
     // --- Data ---------------------------------------------------------------

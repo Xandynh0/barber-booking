@@ -26,6 +26,27 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->configureAdminLoginRateLimiting();
         $this->configurePublicAvailabilityRateLimiting();
+        $this->configureAdminAgendaRateLimiting();
+    }
+
+    /**
+     * Agenda writes by the administrator take the global lock, so they get a
+     * per-user ceiling well above what one person does at the counter.
+     * Resending a confirmation talks to SMTP synchronously: tighter.
+     */
+    private function configureAdminAgendaRateLimiting(): void
+    {
+        RateLimiter::for('admin-agenda-writes', function (Request $request) {
+            return Limit::perMinute(60)
+                ->by('admin:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+                ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
+        });
+
+        RateLimiter::for('admin-resend-confirmation', function (Request $request) {
+            return Limit::perMinute(10)
+                ->by('admin:'.($request->user()?->getAuthIdentifier() ?? $request->ip()))
+                ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
+        });
     }
 
     /**
