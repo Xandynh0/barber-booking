@@ -580,3 +580,15 @@ Diferenças em relação ao planejado:
 Cabeçalhos: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex` e CSP sem scripts. O access log do proxy grava só o caminho, sem a assinatura.
 
 Diferenças em relação ao planejado: nenhuma no contrato. O envio é síncrono após o commit, em vez de por fila, porque não há worker no compose. Reenvio e cancelamento pelo admin ficam para a etapa de operação da agenda.
+
+## 19. Contratos implementados — Catálogo público
+
+Para a homepage e a jornada `/agendar` (seção 2). São só leitura, sem login, com 60 requisições por minuto por IP e respostas mínimas.
+
+| Método / endpoint | Resposta `200` |
+| --- | --- |
+| `GET /api/v1/public/business` | `{ data: { name, address, phone, timezone, booking_horizon_days } }` |
+| `GET /api/v1/public/services` | `{ data: [{ id, name, description, duration_minutes, price }] }`: só serviços ativos oferecidos por ao menos um profissional ativo, ordenados por nome |
+| `GET /api/v1/public/services/{id}/professionals` | `{ data: [{ id, name, description }] }`: só profissionais ativos que oferecem o serviço. Serviço inexistente ou inativo: `404 NOT_FOUND` |
+
+Esses endpoints nunca devolvem configurações administrativas (antecedência, teto por contato, prazo de cancelamento), flags `is_active`, cadastros inativos ou dados de clientes. O fuso e o horizonte servem para mostrar os horários no fuso da barbearia e oferecer só datas dentro do horizonte. A disponibilidade continua sendo decidida pelo motor (seção 16).
