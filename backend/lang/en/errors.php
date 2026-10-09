@@ -26,4 +26,11 @@ return [
     'availability_service_unavailable' => 'Service unavailable for booking.',
     'availability_professional_unavailable' => 'Professional unavailable for booking.',
     'availability_service_not_offered' => 'This professional does not offer the selected service.',
+    'slot_unavailable' => 'This time is no longer available. Please choose another one.',
+    'contact_limit_reached' => 'There is a limit of upcoming bookings per contact. To book more, please contact the barbershop.',
+    'idempotency_key_reused' => 'This idempotency key was already used for another booking. Generate a new key for a new booking.',
+    'invalid_phone' => 'Enter a valid phone number with area code (e.g. +55 11 99999-9999).',
+    'starts_at_needs_offset' => 'Enter the start with date, time and timezone offset (ISO 8601, e.g. 2026-11-03T10:00:00-03:00).',
+    'appointment_conflict_block' => 'There are confirmed bookings in this interval: :list. Cancel them before blocking this time.',
+    'appointment_conflict_working_hours' => 'The new schedule would leave upcoming bookings outside working hours: :list. Cancel them before reducing the schedule.',
 ];

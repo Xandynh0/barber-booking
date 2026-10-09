@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\StoreScheduleBlockRequest;
 use App\Models\BusinessSettings;
 use App\Models\Professional;
 use App\Models\ScheduleBlock;
+use App\Services\Booking\AgendaConflicts;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
@@ -35,7 +36,7 @@ class ScheduleBlockController extends Controller
      * rationale and the documented limitation (professionals added after
      * the closure was created are not retroactively included).
      */
-    public function store(StoreScheduleBlockRequest $request): JsonResponse
+    public function store(StoreScheduleBlockRequest $request, AgendaConflicts $agendaConflicts): JsonResponse
     {
         $validated = $request->validated();
         // Eloquent's `datetime` cast formats the value for storage using
@@ -47,15 +48,18 @@ class ScheduleBlockController extends Controller
         $startsAt = CarbonImmutable::parse($validated['starts_at'])->utc();
         $endsAt = CarbonImmutable::parse($validated['ends_at'])->utc();
 
-        $result = DB::transaction(function () use ($validated, $startsAt, $endsAt) {
-            // Lock the single business_settings row first, before any other
-            // business read/write — see docs/planejamento-barbearia-mvp.md
-            // section 5. No per-professional lock is added.
+        $result = DB::transaction(function () use ($validated, $startsAt, $endsAt, $agendaConflicts) {
+            // Lock the single business_settings row first, then the affected
+            // professional(s) in ID order — the fixed order every agenda
+            // write follows (docs/planejamento-barbearia-mvp.md, seção 5).
             BusinessSettings::query()->lockForUpdate()->first();
 
             if ($validated['scope'] === 'shop') {
                 $groupId = (string) Str::ulid();
-                $professionalIds = Professional::query()->pluck('id');
+                $professionalIds = Professional::query()->orderBy('id')->lockForUpdate()->pluck('id');
+
+                // Seção 7: refuse the closure if it would cover a reservation.
+                $agendaConflicts->assertBlockFree($professionalIds->all(), $startsAt, $endsAt);
 
                 foreach ($professionalIds as $professionalId) {
                     ScheduleBlock::create([
@@ -70,13 +74,15 @@ class ScheduleBlockController extends Controller
                 return ['group_id' => $groupId];
             }
 
-            $professional = Professional::query()->find($validated['professional_id']);
+            $professional = Professional::query()->lockForUpdate()->find($validated['professional_id']);
 
             if (! $professional) {
                 throw ValidationException::withMessages([
                     'professional_id' => [__('errors.professional_not_found')],
                 ]);
             }
+
+            $agendaConflicts->assertBlockFree([$professional->id], $startsAt, $endsAt);
 
             $block = ScheduleBlock::create([
                 'professional_id' => $professional->id,

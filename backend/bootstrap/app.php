@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\BusinessConflictException;
 use App\Http\Middleware\SetLocaleFromAcceptLanguage;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
@@ -68,6 +69,16 @@ return Application::configure(basePath: dirname(__DIR__))
                     ],
                 ], 404);
             }
+        });
+
+        $exceptions->render(function (BusinessConflictException $e, Request $request) {
+            return response()->json([
+                'error' => [
+                    'code' => $e->errorCode,
+                    'message' => $e->getMessage(),
+                    ...$e->details,
+                ],
+            ], 409);
         });
 
         $exceptions->render(function (TokenMismatchException $e, Request $request) {

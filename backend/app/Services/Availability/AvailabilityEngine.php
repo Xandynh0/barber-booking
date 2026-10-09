@@ -27,10 +27,11 @@ use Carbon\CarbonImmutable;
  *   (:00, :15, :30, :45), each working period's start rounded up to the
  *   next quarter.
  *
- * This is a read-only suggestion. It takes no locks: the guarantee against
- * two simultaneous reservations for overlapping intervals must come from
- * revalidating inside the reservation-creation transaction, under the
- * business_settings lock — which does not exist yet.
+ * By itself this is a read-only suggestion and takes no locks. The
+ * guarantee against two simultaneous reservations for overlapping
+ * intervals comes from AppointmentBooker, which calls isSlotAvailable()
+ * inside the creating transaction after locking business_settings and the
+ * professional.
  */
 class AvailabilityEngine
 {
@@ -54,18 +55,7 @@ class AvailabilityEngine
             return [];
         }
 
-        $day = CarbonImmutable::createFromFormat('!Y-m-d', $date, $timezone);
-
-        $windows = WorkingHour::query()
-            ->where('professional_id', $professional->id)
-            ->where('weekday', $day->dayOfWeek)
-            ->orderBy('start_time')
-            ->get()
-            ->map(fn (WorkingHour $period) => [
-                'starts_at' => $this->localInstant($day, $period->start_time, $timezone),
-                'ends_at' => $this->localInstant($day, $period->end_time, $timezone),
-            ])
-            ->all();
+        $windows = $this->workingWindows($professional, $date, $timezone);
 
         if ($windows === []) {
             return [];
@@ -102,6 +92,51 @@ class AvailabilityEngine
     }
 
     /**
+     * Whether `$startsAt` is one of the slots this engine offers right now,
+     * applying every rule of `slotsFor()` — this is how a reservation is
+     * revalidated at creation, so the rules live in exactly one place.
+     *
+     * Safe against concurrent reservations only when called inside the
+     * creating transaction, after the business_settings and professional
+     * row locks were taken (see AppointmentBooker): a plain call is just
+     * another read.
+     */
+    public function isSlotAvailable(Service $service, Professional $professional, CarbonImmutable $startsAt, AvailabilityContext $context): bool
+    {
+        $timezone = BusinessSettings::query()->firstOrFail()->timezone;
+        $localDate = $startsAt->setTimezone($timezone)->format('Y-m-d');
+
+        foreach ($this->slotsFor($service, $professional, $localDate, $context) as $slot) {
+            if ($slot['starts_at']->equalTo($startsAt)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Whether [$startsAt, $endsAt) lies entirely inside one of the
+     * professional's current working periods on that local date. Unlike
+     * `isSlotAvailable()`, it ignores the slot grid, notice and horizon: it
+     * answers only "is this already-booked interval still within working
+     * hours?" (docs/planejamento-barbearia-mvp.md, seção 7).
+     */
+    public function fitsWorkingHours(Professional $professional, CarbonImmutable $startsAt, CarbonImmutable $endsAt): bool
+    {
+        $timezone = BusinessSettings::query()->firstOrFail()->timezone;
+        $localDate = $startsAt->setTimezone($timezone)->format('Y-m-d');
+
+        foreach ($this->workingWindows($professional, $localDate, $timezone) as $window) {
+            if ($startsAt >= $window['starts_at'] && $endsAt <= $window['ends_at']) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Whether this professional may currently be offered for this service.
      * The same check applies to both contexts.
      */
@@ -124,6 +159,27 @@ class AvailabilityEngine
         return $horizonDays > 0
             && $date >= $today->format('Y-m-d')
             && $date <= $lastDate->format('Y-m-d');
+    }
+
+    /**
+     * The professional's working periods on a local date, as UTC instants.
+     *
+     * @return array<int, array{starts_at: CarbonImmutable, ends_at: CarbonImmutable}>
+     */
+    private function workingWindows(Professional $professional, string $date, string $timezone): array
+    {
+        $day = CarbonImmutable::createFromFormat('!Y-m-d', $date, $timezone);
+
+        return WorkingHour::query()
+            ->where('professional_id', $professional->id)
+            ->where('weekday', $day->dayOfWeek)
+            ->orderBy('start_time')
+            ->get()
+            ->map(fn (WorkingHour $period) => [
+                'starts_at' => $this->localInstant($day, $period->start_time, $timezone),
+                'ends_at' => $this->localInstant($day, $period->end_time, $timezone),
+            ])
+            ->all();
     }
 
     /**

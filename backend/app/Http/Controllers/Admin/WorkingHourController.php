@@ -7,6 +7,7 @@ use App\Http\Requests\Admin\UpdateWorkingHoursRequest;
 use App\Models\BusinessSettings;
 use App\Models\Professional;
 use App\Models\WorkingHour;
+use App\Services\Booking\AgendaConflicts;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -24,18 +25,16 @@ class WorkingHourController extends Controller
         return response()->json(['data' => $this->present($professional->id, $workingHours)]);
     }
 
-    public function update(UpdateWorkingHoursRequest $request, Professional $professional): JsonResponse
+    public function update(UpdateWorkingHoursRequest $request, Professional $professional, AgendaConflicts $agendaConflicts): JsonResponse
     {
         $validated = $request->validated();
 
-        DB::transaction(function () use ($validated, $professional) {
-            // Lock the single business_settings row first, before any other
-            // business read/write for this change — see
-            // docs/planejamento-barbearia-mvp.md section 5. There is no
-            // per-professional lock: the request was already fully
-            // validated (format, overlap) before this transaction opened,
-            // so replacing the whole week is safe to do unconditionally.
+        DB::transaction(function () use ($validated, $professional, $agendaConflicts) {
+            // Lock the single business_settings row first, then the
+            // professional — the fixed order every agenda write follows
+            // (docs/planejamento-barbearia-mvp.md, seção 5).
             BusinessSettings::query()->lockForUpdate()->first();
+            Professional::query()->lockForUpdate()->find($professional->id);
 
             WorkingHour::query()->where('professional_id', $professional->id)->delete();
 
@@ -49,6 +48,11 @@ class WorkingHourController extends Controller
                     ]);
                 }
             }
+
+            // Seção 7: a future confirmed reservation that no longer fits the
+            // new week refuses the whole change (the exception rolls back the
+            // writes above).
+            $agendaConflicts->assertFutureAppointmentsFitWorkingHours($professional);
         });
 
         $workingHours = WorkingHour::query()
