@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\WorkingHour;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -39,6 +40,9 @@ class PublicAppointmentTest extends TestCase
         parent::setUp();
 
         $this->travelTo(CarbonImmutable::parse('2026-11-02 08:00', self::TZ));
+        // The container's real MAIL_MAILER=smtp would beat phpunit.xml's
+        // `array` (see docs/desenvolvimento.md), so never rely on it here.
+        Mail::fake();
 
         BusinessSettings::factory()->create(['timezone' => self::TZ]);
         $this->service = Service::factory()->create(['name' => 'Corte degradê', 'duration_minutes' => 45, 'price' => '55.90']);

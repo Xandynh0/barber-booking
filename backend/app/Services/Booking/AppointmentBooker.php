@@ -4,6 +4,7 @@ namespace App\Services\Booking;
 
 use App\Exceptions\BusinessConflictException;
 use App\Models\Appointment;
+use App\Models\AppointmentNotification;
 use App\Models\BusinessSettings;
 use App\Models\Professional;
 use App\Models\Service;
@@ -35,7 +36,8 @@ use Illuminate\Validation\ValidationException;
  * 6. Insert with server-computed end and snapshots; commit.
  *
  * Deadlocks and lock-wait timeouts are retried a limited number of times by
- * DB::transaction(). E-mail confirmation is not part of this delivery.
+ * DB::transaction(). The confirmation e-mail is only recorded here
+ * (`pending`); it is sent after commit by ConfirmationNotifier.
  */
 class AppointmentBooker
 {
@@ -93,6 +95,17 @@ class AppointmentBooker
                 'idempotency_key' => $idempotencyKey,
                 'request_fingerprint' => $fingerprint,
             ]);
+
+            // Seção 5, step 5: the confirmation is recorded in the same
+            // transaction (so a rollback leaves no orphan notification) but
+            // only delivered after commit, by ConfirmationNotifier.
+            if ($appointment->customer_email !== null && $appointment->starts_at->isFuture()) {
+                AppointmentNotification::create([
+                    'appointment_id' => $appointment->id,
+                    'kind' => AppointmentNotification::KIND_CONFIRMATION,
+                    'status' => AppointmentNotification::STATUS_PENDING,
+                ]);
+            }
 
             return ['appointment' => $appointment, 'replayed' => false];
         }, self::TRANSACTION_ATTEMPTS);
