@@ -242,6 +242,47 @@ A primeira versão desta funcionalidade (ver histórico do PR #4) explicitamente
 
 Isso é o que permite testar esta funcionalidade de qualquer fuso horário (navegador do desenvolvedor, CI, etc.) e ainda assim ver os horários certos em `America/Sao_Paulo`.
 
+## Motor de disponibilidade
+
+Calcula os horários livres de um profissional para um serviço numa data. É uma **sugestão de leitura**: não grava nada e não usa lock. A garantia de que duas reservas simultâneas não ocupam o mesmo intervalo **ainda não existe** — ela dependerá de revalidar a disponibilidade dentro da transação de criação da reserva (lock de `business_settings`, depois do profissional; `docs/planejamento-barbearia-mvp.md`, seção 5), que é da entrega de agendamento público.
+
+- Código: `app/Services/Availability/AvailabilityEngine.php` (motor único) e `AvailabilityContext.php` (`Public`/`Admin`). As duas rotas usam o mesmo `AvailabilityController`, cada uma presa a um método que fixa o contexto; não existe parâmetro de contexto. A rota admin fica atrás de `auth:sanctum`.
+- Contrato completo: `docs/planejamento-barbearia-mvp.md`, seção 16.
+
+### Regras
+
+| Regra | Público | Admin |
+|---|---|---|
+| Serviço e profissional ativos e vinculados (senão `422`) | sim | sim |
+| Data dentro do horizonte: hoje até hoje + `booking_horizon_days` − 1, pela data local da barbearia | sim | sim |
+| Antecedência mínima (`min_notice_minutes`), inclusiva no limite exato | sim | **não** |
+| Nunca oferece início no passado (início igual a "agora" é aceito) | sim (implícito na antecedência) | sim |
+| Duração inteira contida em **um** período de expediente (não atravessa almoço nem o fim) | sim | sim |
+| Sem interseção com bloqueios (individuais e fechamentos) e reservas com `status` diferente de `cancelled` | sim | sim |
+
+- **Intervalos com fim exclusivo** `[início, fim)`: há conflito quando `existente.starts_at < novo.ends_at` e `existente.ends_at > novo.starts_at`. Um atendimento pode começar exatamente quando o anterior (ou um bloqueio) termina.
+- **Grade:** quartos de hora fixos do relógio local da barbearia (`:00`, `:15`, `:30`, `:45`). O início de cada período é arredondado para o próximo quarto (expediente às 09:10 → primeiro horário 09:15); a partir dele, os candidatos avançam de 15 em 15 minutos de tempo real.
+- **Fuso:** a data e o dia da semana são interpretados no fuso de `business_settings.timezone`; cada horário de expediente é convertido para UTC naquele dia específico, então dias de mudança de horário de verão ficam com a duração real correta. Hora local inexistente (adiantamento do relógio) é resolvida pelo PHP para o próximo instante válido; hora ambígua (atraso do relógio), para a primeira ocorrência. `America/Sao_Paulo` não tem horário de verão desde 2019, mas o comportamento está coberto por testes com `America/New_York`.
+- **Data fora do horizonte ou no passado:** `200` com `slots: []`, não erro — a data em si é válida, só não tem horários.
+- A resposta segue a convenção dos outros endpoints, com o conteúdo dentro de `data` (`{ "data": { "timezone", "date", "slots" } }`), e instantes em UTC com `toIso8601String()` (`2026-11-03T12:00:00+00:00`). Nunca inclui motivo de bloqueio nem dado de reserva.
+- **Rate limit público:** 60 requisições por minuto por IP (`throttle:public-availability`), com a mesma resposta `429 RATE_LIMITED` do login.
+
+### Tabela `appointments`
+
+Criada nesta entrega com a estrutura aprovada (`docs/planejamento-barbearia-mvp.md`, seção 4), mas **nada grava nela ainda**: o motor só a lê como tempo ocupado. `public_id` é ULID (`HasUlids` apontado para a coluna, a chave primária continua numérica); FKs de profissional e serviço com `restrictOnDelete`; índices `(professional_id, starts_at)`, `(customer_email, status, starts_at)`, `(customer_phone, status, starts_at)`; `public_id` e `idempotency_key` únicos. Status usados: `confirmed` e `cancelled`.
+
+Consequência para o importador de dados de teste: `import:test-data --remove` agora recusa remover qualquer coisa se alguma reserva usa um profissional ou serviço da importação (as FKs também impediriam, mas com um erro de banco em vez de uma explicação). Essa verificação não tem teste automatizado: o comando grava o manifesto num caminho fixo do `storage/` real, que um teste sobrescreveria.
+
+### Testando à mão
+
+```bash
+# público (sem sessão)
+curl -s "http://localhost:8080/api/v1/public/availability?service_id=1&professional_id=1&date=2026-11-03"
+# admin: mesma query em /api/v1/admin/availability, com sessão (ver "Autenticação administrativa")
+```
+
+Os dados de teste importados não têm expediente (o pacote não cria). Para ver horários, cadastre expediente em `/admin/expediente` para um profissional ativo vinculado ao serviço.
+
 ## Importação de dados de teste fictícios
 
 Comando manual (`backend/app/Console/Commands/ImportTestData.php`) para popular o banco de desenvolvimento com um pacote fixo de 15 serviços e 12 profissionais fictícios (`dados-teste-barber-booking`, mantido fora do repositório). **Nunca roda no boot, seed padrão ou CI** — é estritamente `php artisan import:test-data`, à mão.
@@ -360,6 +401,16 @@ Internacionalização acrescenta `tests/Unit/SetLocaleFromAcceptLanguageTest.php
 
 Achado na implementação (não um bug de teste, um bug de aplicação pego pelo teste): o cast `datetime` do Eloquent não converte timezone ao gravar — ver "Bloqueios (`schedule_blocks`)" acima para a correção (`CarbonImmutable::parse(...)->utc()` explícito no controller).
 
+### Testes de disponibilidade
+
+`tests/Feature/AvailabilityTest.php` (28 testes, pelas duas rotas HTTP, MySQL real, relógio controlado com `travelTo`): formato do contrato e ausência de dados internos; rota admin exigindo sessão; parâmetro `context` não muda as regras públicas; validação de data (incluindo `2026-02-30`); serviço/profissional inativo ou inexistente e profissional sem o serviço, nos dois contextos, com mensagem em pt-BR e en; dia sem expediente; duração que precisa caber inteira no período; serviço maior que o período; almoço com o exemplo da seção 5 do planejamento; arredondamento para o próximo quarto de hora; bloqueio individual com intervalos adjacentes; fechamento da barbearia; bloqueio e reserva de outro profissional sem interferência; reserva confirmada bloqueia e cancelada não; reserva de duração diferente com conflito parcial; antecedência mínima exata (08:00 → 09:00 incluído; 08:00:01 → 09:15); admin ignorando a antecedência sem receber passado; datas passadas; horizonte contando hoje (30 → até hoje+29) nos dois contextos; horizonte pela data local e não UTC (22:30 em São Paulo já é o dia seguinte em UTC); data e dia da semana no fuso da barbearia (`Asia/Tokyo`); mesmo horário local em UTC diferente antes e depois do horário de verão (`America/New_York`); período que atravessa a mudança de horário usando tempo real; rate limit público.
+
+Verificação dos próprios testes: cinco defeitos introduzidos de propósito no motor (intervalo fechado em vez de fim exclusivo, admin aplicando antecedência, horizonte calculado em UTC, reservas canceladas ocupando horário, grade sem arredondar para o quarto de hora) foram todos detectados — cada um derrubou entre 1 e 4 testes. O motor foi restaurado e conferido byte a byte depois.
+
+Resultado: **111 passed** no backend (83 anteriores + 28), `vendor/bin/pint --format agent` sem alterações.
+
+**O que estes testes não provam:** prevenção de reservas simultâneas. Não há criação de reserva, então não há corrida a testar; o teste de concorrência com duas conexões MySQL disputando o mesmo intervalo entra junto da criação de reservas.
+
 ## Internacionalização (PT-BR / English)
 
 Requisito registrado em `docs/planejamento-barbearia-mvp.md`, seção 15. Aqui ficam as decisões de implementação.
@@ -469,9 +520,11 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 ## Limitações desta etapa
 
-- Serviços, profissionais, seus vínculos, expediente semanal e bloqueios estão implementados, assim como autenticação administrativa. Disponibilidade (motor que cruza expediente + bloqueios + reservas), catálogo público, agendamentos, cancelamento e notificações ainda não existem — expediente e bloqueios só armazenam dados nesta entrega, sem nenhum cálculo de horários livres.
+- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa e o **motor de disponibilidade** (consulta pública e admin) estão implementados. Criação de reservas, catálogo público, telas de agendamento, cancelamento e notificações ainda não existem. A tabela `appointments` existe, mas nada grava nela.
+- **Pendente para a criação de reservas:** revalidar a disponibilidade dentro da transação, com lock de `business_settings` e depois do profissional; idempotência; teto por contato; teste de concorrência com duas conexões MySQL. Também as regras da seção 7 do planejamento que passam a valer quando houver reservas: recusar bloqueio sobre reserva confirmada e recusar redução de expediente que exclua reserva futura.
+- O motor não tem tela ainda: a interface pública de agendamento e o uso no painel ficam para as próximas entregas.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
-- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da funcionalidade de disponibilidade — o lock de `business_settings` usado nos cadastros, expediente e bloqueios desta e da entrega anterior não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
+- Testes de concorrência (duas reservas disputando o mesmo horário) serão adicionados junto da criação de reservas (a consulta de disponibilidade desta entrega é só leitura e não tem corrida a testar) — o lock de `business_settings` usado nos cadastros, expediente e bloqueios desta e da entrega anterior não foi testado sob concorrência real (duas escritas simultâneas), só o isolamento básico de conexão (`MySqlConnectionIsolationTest`).
 - Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas de uma entrega anterior) ainda **não** foram confirmados visualmente em navegador. A internacionalização (PT-BR/English, esta entrega) foi verificada via `curl` contra o proxy real com `Accept-Language: pt-BR`/`en` (mensagens de erro/validação traduzidas corretamente) e via teste de integração automatizado (`App.test.jsx`, troca de idioma pelo router real nas três áreas), mas a troca de idioma pelo botão **não** foi confirmada visualmente em navegador. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual abaixo.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.
