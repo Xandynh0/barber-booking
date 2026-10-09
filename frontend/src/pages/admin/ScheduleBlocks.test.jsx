@@ -319,4 +319,20 @@ describe('ScheduleBlocks', () => {
       )
     )
   })
+
+  it('labels the professional field and explains when no professional exists yet', async () => {
+    listScheduleBlocks.mockResolvedValue({ data: [] })
+
+    const { unmount } = renderScheduleBlocks()
+
+    expect(await screen.findByLabelText('Profissional')).toBeInTheDocument()
+    unmount()
+
+    listProfessionals.mockResolvedValue({ data: [] })
+    renderScheduleBlocks()
+
+    expect(
+      await screen.findByText('Nenhum profissional cadastrado ainda — cadastre em "Profissionais" primeiro.')
+    ).toBeInTheDocument()
+  })
 })

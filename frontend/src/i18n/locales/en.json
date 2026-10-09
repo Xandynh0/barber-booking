@@ -28,6 +28,10 @@
       "status": "Status",
       "statusActive": "Active",
       "statusInactive": "Inactive"
+    },
+    "errors": {
+      "network": "Could not connect to the server. Check your connection.",
+      "generic": "An unexpected error occurred. Please try again."
     }
   },
   "nav": {
@@ -168,6 +172,8 @@
       "notFound": "This block no longer exists. Refresh the list.",
       "generic": "Could not save. Please try again.",
       "removeGeneric": "Could not remove. Please try again."
-    }
+    },
+    "professionalLabel": "Professional",
+    "noProfessionalsYet": "No professionals registered yet — register one under \"Professionals\" first."
   }
 }

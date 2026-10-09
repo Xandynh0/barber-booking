@@ -28,6 +28,10 @@
       "status": "Status",
       "statusActive": "Ativo",
       "statusInactive": "Inativo"
+    },
+    "errors": {
+      "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
+      "generic": "Ocorreu um erro inesperado. Tente novamente."
     }
   },
   "nav": {
@@ -168,6 +172,8 @@
       "notFound": "Este bloqueio não existe mais. Atualize a lista.",
       "generic": "Não foi possível salvar. Tente novamente.",
       "removeGeneric": "Não foi possível remover. Tente novamente."
-    }
+    },
+    "professionalLabel": "Profissional",
+    "noProfessionalsYet": "Nenhum profissional cadastrado ainda — cadastre em \"Profissionais\" primeiro."
   }
 }
