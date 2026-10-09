@@ -315,14 +315,14 @@ O lock global serializa todas as escritas da agenda da barbearia. É a escolha d
 - **Fingerprint:** SHA-256 de origem (`public`), serviço, profissional, início em UTC e contatos canônicos. A chave fica presa à intenção e ao contexto, então não pode ser reaproveitada com outro payload nem entre público e admin.
 - **Resposta sem e-mail e telefone**, com o serviço descrito pelos snapshots.
 - **Rate limit:** 10 POSTs por minuto por IP (`throttle:public-appointments`); replays contam.
-- **Sem e-mail de confirmação nesta entrega:** a tabela `appointment_notifications`, o envio e o link de cancelamento ficam para a próxima. Por isso a resposta ainda não tem `notification_status`.
+- **E-mail de confirmação e cancelamento:** ver "Confirmação por e-mail e cancelamento" abaixo. A resposta traz `notification_status` (`pending`, `sent`, `failed` ou `skipped`).
 
 ### Regras da seção 7 (agora que reservas existem)
 
 - **Bloqueio sobre reserva:** criar um bloqueio, individual ou fechamento da barbearia, que cruze uma reserva não cancelada é recusado com `409 APPOINTMENT_CONFLICT`. A mensagem lista os conflitos com data e hora no fuso da barbearia e o array `error.conflicts` traz `public_id`, profissional, cliente e intervalo. Nada é cancelado e nenhum bloqueio é criado.
 - **Redução de expediente:** um `PUT` de expediente que deixe uma reserva futura confirmada fora de qualquer período do dia é recusado com `409 APPOINTMENT_CONFLICT`, e a alteração inteira é desfeita.
 - O texto da seção 7 fala em "reserva confirmada" para bloqueios e "reserva futura confirmada" para expediente. Por isso, bloqueios consideram qualquer reserva não cancelada, inclusive passada, e o expediente só considera reservas futuras.
-- **Limitação:** a mensagem orienta a cancelar a reserva antes, mas ainda **não existe endpoint de cancelamento** (nem público por link, nem admin). Até lá, um bloqueio sobre uma reserva só pode ser criado depois que ela for cancelada por outro meio.
+- O cliente pode cancelar a própria reserva pelo link do e-mail; o cancelamento **pelo admin** ainda não existe, então um bloqueio sobre uma reserva só pode ser criado depois que o cliente cancelar.
 - O frontend já mostra a mensagem traduzida que vem do backend (`error.message`). A lista estruturada em `error.conflicts` ainda não tem tela própria.
 
 ### Testando à mão
@@ -335,6 +335,55 @@ curl -s -X POST http://localhost:8080/api/v1/public/appointments \
 ```
 
 Para conseguir um `201`, o profissional precisa ter expediente cadastrado para o dia; os dados de teste importados não têm. Repetir o mesmo comando com a mesma chave devolve `200` com a mesma reserva; com outra chave, `409 SLOT_UNAVAILABLE`.
+
+## Confirmação por e-mail e cancelamento
+
+Depois de criada, a reserva pública recebe um e-mail de confirmação com um link para o próprio cliente cancelar, sem login (`docs/planejamento-barbearia-mvp.md`, seções 5 e 6; contrato na seção 18).
+
+### Fluxo pós-reserva
+
+1. Dentro da transação da reserva, junto do `INSERT`, é gravada uma `appointment_notifications` (`kind=confirmation`, `status=pending`). Se a transação for desfeita, ela some junto: não existe confirmação sem reserva.
+2. **Depois do commit**, o controller entrega o e-mail (`ConfirmationNotifier`). A entrega é registrada com `DB::afterCommit()`, que roda na hora quando não há transação aberta e esperaria o commit mais externo se a chamada um dia ficasse dentro de uma. O e-mail nunca sai antes de a reserva estar gravada: `ConfirmationAfterCommitTest` confere, por uma segunda conexão MySQL, que a reserva já está visível no momento do envio.
+3. O resultado vai para a notificação: `sent` (com `sent_at`); `failed`, com só a **classe** da exceção em `last_error_code`, nunca a mensagem, que pode ter endereços; ou `skipped`, se na hora do envio a reserva não estiver mais confirmada e futura. Uma falha de e-mail **não desfaz a reserva**.
+4. A varredura `php artisan appointments:send-pending-confirmations` reenvia o que ficou `pending` ou `failed`. Ela está agendada a cada minuto em `routes/console.php`.
+   - Só pega notificações sem atualização há 2 minutos, para não disputar com o envio da própria requisição.
+   - Tenta no máximo 5 vezes.
+   - Precisa do scheduler rodando (`docker compose exec backend php artisan schedule:work`), que **não sobe sozinho** no compose atual.
+5. Duas entregas da mesma notificação nunca enviam duas vezes: cada uma reivindica a linha com um `UPDATE` condicional em `attempts`, e só a que mudou a linha envia. Um provedor externo ainda pode entregar em dobro após um timeout, o que o planejamento aceita.
+6. **Retry da criação** com o mesmo `Idempotency-Key` devolve a reserva existente (`200`) e **não** envia outro e-mail; a resposta mostra o status atual da notificação.
+
+O envio é **síncrono** na requisição, depois do commit, e não por fila. O projeto não tem worker de fila no compose, e um job na fila nunca seria executado. A varredura cobre o caso de a requisição morrer entre o commit e o envio.
+
+### O e-mail
+
+- `App\Mail\AppointmentConfirmationMail`, template Markdown do Laravel em `resources/views/mail/appointment-confirmation.blade.php`, sem biblioteca externa. Em desenvolvimento chega no Mailpit (http://localhost:8025).
+- Conteúdo: nome do cliente, serviço, profissional, data, horário, duração, preço, código público, endereço e telefone da barbearia (quando cadastrados) e o botão de cancelamento.
+- Serviço, duração e preço vêm dos **snapshots**: editar o serviço depois não muda o que o e-mail diz. Data e hora aparecem no fuso da barbearia.
+- Idioma: o da requisição que criou a reserva (`Accept-Language`). Um reenvio pela varredura não tem requisição e sai no padrão, `pt_BR`.
+
+### Link de cancelamento
+
+- Formato: `{APP_URL}/cancelar/{public_id}?expires={timestamp}&signature={hmac}`. É uma rota Laravel fora de `/api`; o proxy encaminha `/cancelar/` para o backend.
+- `URL::temporarySignedRoute()` com a chave da aplicação, **expirando no início da reserva**. Nada do link é guardado no banco; ele é assinado de novo a cada envio.
+- A assinatura é **relativa** (caminho + query), validada com `signed:relative`. Atrás do proxy, o backend não recebe o host público com a porta, e uma assinatura absoluta nunca bateria. Assinar o caminho já prende o link a esse `public_id` e a essa expiração: trocar qualquer um invalida a assinatura. O host do link vem de `APP_URL`.
+- Usa o `public_id` (ULID), nunca o ID interno.
+
+### Regras do cancelamento
+
+- **GET** só mostra um resumo mínimo (serviço, profissional, data, horário, código), sem nome, e-mail ou telefone, e **nunca altera nada**. Um scanner de e-mail que abra o link não cancela.
+- **POST** (mesmo caminho e query assinados, com CSRF) cancela e redireciona (`303`) para o mesmo GET assinado, que mostra "Reserva cancelada".
+- Cancelar grava `status=cancelled`, `cancelled_at` e `cancelled_by=customer`. Não apaga a reserva nem toca em snapshots ou contatos, e o horário volta à disponibilidade. Usa a mesma ordem de locks das outras escritas (`business_settings`, profissional, reserva).
+- **Idempotente:** repetir o POST não muda nada, nem `cancelled_at`, e a página mostra "já está cancelada".
+- **Prazo:** só é possível cancelar enquanto `agora < início − cancel_min_notice_minutes`. Com o padrão 0, até o início. Depois do prazo, mas antes do início, o link ainda abre e explica que o prazo acabou. Depois do início, o link expira.
+- **Assinatura inválida, alterada, ausente, expirada, ou o `public_id` trocado** resultam em `403`. Um link assinado para uma reserva inexistente resulta em `404`. As duas respostas mostram **a mesma página genérica** ("link inválido ou expirou"), sem revelar se a reserva existe.
+- Proteções da página: `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `X-Robots-Tag: noindex` e uma CSP sem `script-src`, então nenhum script roda. O access log do nginx para `/cancelar/` grava só o caminho, sem a query, e portanto **sem a assinatura**. Rate limit: 30 por minuto por IP.
+- Em desenvolvimento, o Laravel Boost, um pacote só de dev, injeta um script em toda página HTML quando `APP_ENV=local`. A CSP impede que ele rode nessas páginas.
+
+### Testando à mão (verificado nesta entrega)
+
+1. Cadastre expediente para um profissional ativo vinculado a um serviço ativo.
+2. Faça o POST de criação (ver "Criação pública de reservas"): `notification_status` deve vir `sent` e o e-mail deve aparecer em http://localhost:8025.
+3. Abra o botão "Cancelar reserva" do e-mail e confirme. A página deve mostrar "Reserva cancelada", e o horário deve voltar em `GET /api/v1/public/availability`.
 
 ## Importação de dados de teste fictícios
 
@@ -499,6 +548,38 @@ Resultado: **111 passed** no backend (83 anteriores + 28), `vendor/bin/pint --fo
 
 Resultado: **155 passed** no backend (111 anteriores + 44 novos). O teste de concorrência passou em 5 rodadas seguidas. `vendor/bin/pint --format agent` passou.
 
+### Testes de confirmação e cancelamento
+
+- `tests/Feature/BookingConfirmationTest.php` (12):
+  - exatamente um e-mail por reserva, com a notificação `sent`;
+  - retry com a mesma chave sem segundo e-mail;
+  - reserva recusada sem e-mail nem notificação;
+  - conteúdo do e-mail (dados, código, link e rodapé traduzido);
+  - link assinado para a reserva certa, expirando no início e abrindo a página dela;
+  - snapshots em vez do serviço atual;
+  - e-mail em inglês;
+  - falha de SMTP real (porta fechada) mantendo a reserva e registrando `failed`;
+  - varredura: reenvia pendentes e falhas antigas, ignora recentes e esgotadas, marca `skipped` para canceladas e passadas;
+  - duas entregas da mesma notificação enviando uma vez só.
+- `tests/Feature/ConfirmationAfterCommitTest.php` (1): no instante do envio, uma segunda conexão MySQL já enxerga a reserva e a notificação. Usa dados gravados de fato (`DatabaseTruncation`). Verificado: com o envio movido de propósito para dentro da transação, a segunda conexão viu 0 reservas e o teste falhou.
+- `tests/Feature/PublicCancellationTest.php` (15):
+  - GET com resumo mínimo e sem alterar nada;
+  - cabeçalhos de privacidade e CSP sem scripts;
+  - página em inglês;
+  - cancelamento válido sem apagar;
+  - snapshots e identidade preservados, sem reserva nova;
+  - cancelamento repetido;
+  - campos do formulário ignorados;
+  - horário de volta à disponibilidade;
+  - assinatura alterada, ausente e expiração alterada recusadas;
+  - `public_id` de outra reserva com esta assinatura recusado;
+  - reserva inexistente com a mesma página genérica;
+  - link válido até o início e expirado depois;
+  - prazo de `cancel_min_notice_minutes` exato;
+  - rate limit.
+
+Resultado: **183 passed** no backend (155 anteriores + 28 novos), também com o ambiente limpo, como na CI (`APP_ENV=testing`).
+
 ## Internacionalização (PT-BR / English)
 
 Requisito registrado em `docs/planejamento-barbearia-mvp.md`, seção 15. Aqui ficam as decisões de implementação.
@@ -539,7 +620,7 @@ Requisito registrado em `docs/planejamento-barbearia-mvp.md`, seção 15. Aqui f
 
 ## Mailpit
 
-Qualquer e-mail enviado pelo backend (`MAIL_MAILER=smtp`, `MAIL_HOST=mailpit`) fica disponível em http://localhost:8025, sem sair da rede local.
+Qualquer e-mail enviado pelo backend (`MAIL_MAILER=smtp`, `MAIL_HOST=mailpit`) fica disponível em http://localhost:8025, sem sair da rede local. A confirmação de reserva chega aqui (ver "Confirmação por e-mail e cancelamento"). A API do Mailpit (`GET http://localhost:8025/api/v1/messages`) ajuda a conferir o conteúdo sem abrir o navegador.
 
 ## Verificação manual no navegador
 
@@ -608,12 +689,16 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 ## Limitações desta etapa
 
-- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade** e a **criação pública de reservas** (`POST /api/v1/public/appointments`, com proteção contra double booking na transação) estão implementados. Catálogo público, telas de agendamento, reserva pelo admin, cancelamento e notificações ainda não existem.
-- **Pendente:** e-mail de confirmação (`appointment_notifications`, envio fora da transação, varredura de pendências) e cancelamento por link assinado (seção 6), reserva pelo admin (incluindo "Atender agora"), cancelamento pelo admin e telas públicas de agendamento. Sem cancelamento, as recusas da seção 7 ainda não têm saída pela interface.
-- O motor e a criação de reservas ainda não têm tela: a interface pública de agendamento e o uso no painel ficam para as próximas entregas.
+- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade**, a **criação pública de reservas** (com proteção contra double booking na transação), o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado** estão implementados. Catálogo público, telas de agendamento, reserva e cancelamento pelo admin e reenvio manual de e-mail ainda não existem.
+- **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, e telas públicas de agendamento. O scheduler, necessário para a varredura de e-mails pendentes, não sobe sozinho no compose.
+- O motor e a criação de reservas ainda não têm tela no React; só o cancelamento tem página, e ela é Laravel, como o planejamento prevê.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
 - **Diferença de 20 assertions entre Docker e CI (investigada):** o Laravel lê variáveis de ambiente primeiro de `$_SERVER` e depois de `$_ENV` (`Illuminate\Support\Env`), e o `<env force="true">` do PHPUnit só escreve em `putenv`/`$_ENV`. No Docker, o `env_file` do compose transforma `ADMIN_LOGIN_THROTTLE_PER_EMAIL=5` e `PER_IP=20` do `.env` em variáveis de ambiente reais, que vencem os valores forçados do `phpunit.xml` (2 e 3). Os dois testes de throttle do login repetem tentativas até o limite e fazem 20 assertions a mais no Docker. Reproduzido: rodando `phpunit` no mesmo container com ambiente limpo (`env -i`, só as variáveis de banco), a suíte dá exatamente as assertions da CI, e o JUnit aponta só `AuthTest::test_login_throttles_by_ip_and_normalized_email` (13 contra 10) e `test_login_throttles_by_ip_alone_across_different_emails` (28 contra 11). Os testes passam nos dois ambientes, mas localmente exercitam limites diferentes da CI. Correção possível, pendente e fora deste escopo: usar `<server>` em vez de `<env>` no `phpunit.xml` para essas variáveis, ou tirá-las do `env_file` do container.
+- **Ambiente dos testes no Docker (pendência separada, ampliada nesta entrega):** além da diferença de 20 assertions acima, a mesma causa faz a suíte no Docker rodar com **`APP_ENV=local`**, e não `testing`, além de `MAIL_MAILER=smtp`. O `env_file` do compose coloca `APP_ENV=local` e `MAIL_MAILER=smtp` em `$_SERVER`, que vence o `<env force>` do `phpunit.xml`.
+  - Verificado com um teste temporário que imprimiu, no Docker, `env=local runningUnitTests=false mail=smtp`, e com ambiente limpo, `env=testing runningUnitTests=true mail=array`.
+  - Consequências: localmente, um teste que não simule o mail envia e-mail **de verdade** para o Mailpit (por isso os testes desta entrega usam `Mail::fake()` ou configuram o transporte explicitamente); o Laravel Boost injeta seu script nas páginas HTML; e o bypass de CSRF de testes não se aplica.
+  - A CI roda com `testing`. Correção sugerida, fora deste escopo: usar `<server>` em vez de `<env>` no `phpunit.xml` para essas variáveis, ou não passá-las pelo `env_file` ao rodar testes.
 - Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas de uma entrega anterior) ainda **não** foram confirmados visualmente em navegador. A internacionalização (PT-BR/English, esta entrega) foi verificada via `curl` contra o proxy real com `Accept-Language: pt-BR`/`en` (mensagens de erro/validação traduzidas corretamente) e via teste de integração automatizado (`App.test.jsx`, troca de idioma pelo router real nas três áreas), mas a troca de idioma pelo botão **não** foi confirmada visualmente em navegador. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual abaixo.
 - `backend/composer.json` originalmente declarava `"php": "^8.3"`, mas o `composer.lock` resolvido trava `symfony/*` em versões que exigem PHP ≥8.4.1; `composer install` só falha ao rodar de fato em PHP 8.3 (o `platform` do lock não é validado contra o interpretador real até o install). Corrigido para `^8.4`, que é o que a imagem Docker e o CI já usavam.

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A reservation. Only read in this delivery (the availability engine treats
@@ -88,5 +89,13 @@ class Appointment extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(Service::class);
+    }
+
+    /**
+     * @return HasOne<AppointmentNotification, $this>
+     */
+    public function confirmationNotification(): HasOne
+    {
+        return $this->hasOne(AppointmentNotification::class)->where('kind', AppointmentNotification::KIND_CONFIRMATION);
     }
 }

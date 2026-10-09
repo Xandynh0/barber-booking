@@ -2,11 +2,14 @@
 
 use App\Exceptions\BusinessConflictException;
 use App\Http\Middleware\SetLocaleFromAcceptLanguage;
+use App\Models\BusinessSettings;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Session\TokenMismatchException;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -27,6 +30,44 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->prependToGroup('api', SetLocaleFromAcceptLanguage::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Signed cancellation pages: an invalid or expired signature, an
+        // unknown reservation and too many attempts all get the same kind
+        // of plain page, never revealing whether a reservation exists.
+        $cancellationPage = function (int $status, string $messageKey) {
+            $settings = BusinessSettings::query()->first();
+
+            return response()->view('cancellation.error', [
+                'title' => __('booking.cancel.error_title'),
+                'message' => __($messageKey),
+                'shopName' => $settings?->name ?: config('app.name'),
+                'shopPhone' => $settings?->phone,
+            ], $status);
+        };
+
+        $exceptions->render(function (InvalidSignatureException $e, Request $request) use ($cancellationPage) {
+            if ($request->is('cancelar/*')) {
+                return $cancellationPage(403, 'booking.cancel.invalid_link');
+            }
+        });
+
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) use ($cancellationPage) {
+            if ($request->is('cancelar/*')) {
+                return $cancellationPage(404, 'booking.cancel.invalid_link');
+            }
+        });
+
+        $exceptions->render(function (TokenMismatchException $e, Request $request) use ($cancellationPage) {
+            if ($request->is('cancelar/*')) {
+                return $cancellationPage(419, 'booking.cancel.form_expired');
+            }
+        });
+
+        $exceptions->render(function (ThrottleRequestsException $e, Request $request) use ($cancellationPage) {
+            if ($request->is('cancelar/*')) {
+                return $cancellationPage(429, 'booking.cancel.too_many_attempts')->withHeaders($e->getHeaders());
+            }
+        });
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
