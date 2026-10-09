@@ -9,11 +9,19 @@ use App\Http\Controllers\Admin\WorkingHourController;
 use App\Http\Controllers\AvailabilityController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\PublicAppointmentController;
+use App\Http\Controllers\PublicCatalogController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class);
 
 Route::prefix('v1/public')->name('public.')->group(function () {
+    Route::middleware('throttle:public-catalog')->group(function () {
+        Route::get('/business', [PublicCatalogController::class, 'business'])->name('business');
+        Route::get('/services', [PublicCatalogController::class, 'services'])->name('services');
+        Route::get('/services/{service}/professionals', [PublicCatalogController::class, 'professionals'])
+            ->whereNumber('service')
+            ->name('services.professionals');
+    });
     Route::get('/availability', [AvailabilityController::class, 'forPublic'])
         ->middleware('throttle:public-availability')
         ->name('availability');

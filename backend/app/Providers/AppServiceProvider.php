@@ -57,6 +57,13 @@ class AppServiceProvider extends ServiceProvider
      */
     private function configurePublicAvailabilityRateLimiting(): void
     {
+        // Catalog reads for the homepage and the booking journey.
+        RateLimiter::for('public-catalog', function (Request $request) {
+            return Limit::perMinute(60)
+                ->by($request->ip())
+                ->response(fn (Request $request, array $headers) => $this->rateLimitedResponse($headers));
+        });
+
         RateLimiter::for('public-availability', function (Request $request) {
             return Limit::perMinute(60)
                 ->by($request->ip())
