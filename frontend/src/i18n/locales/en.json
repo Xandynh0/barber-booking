@@ -32,7 +32,8 @@
     "errors": {
       "network": "Could not connect to the server. Check your connection.",
       "generic": "An unexpected error occurred. Please try again."
-    }
+    },
+    "skipToContent": "Skip to content"
   },
   "nav": {
     "ariaLabel": "Admin navigation",
@@ -58,7 +59,19 @@
     "phone": "Phone",
     "adminLink": "Administrator area",
     "servicesIntro": "Choose a service to see the free times.",
-    "durationAndPrice": "{{duration}} · {{price}}"
+    "durationAndPrice": "{{duration}} · {{price}}",
+    "eyebrow": "Barbershop",
+    "seeServices": "See services and prices",
+    "howTitle": "How to book",
+    "how": {
+      "service": "Choose the service",
+      "serviceText": "Duration and price are shown before you decide.",
+      "professional": "Choose the professional",
+      "professionalText": "Only those who perform the chosen service are listed.",
+      "time": "Choose the time",
+      "timeText": "Only truly free times are shown."
+    },
+    "servicesEyebrow": "Price list"
   },
   "auth": {
     "subtitle": "Administrative access",

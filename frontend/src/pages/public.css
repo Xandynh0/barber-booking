@@ -1,72 +1,447 @@
-/* Public pages (homepage and booking journey), after the visual references
-   docs/design/old-barber.png and docs/design/2.png. Tokens, buttons, icon
-   bubbles and cards come from src/styles/barber-theme.css; this file only
-   lays out the public screens and is scoped to their own classes. */
+/* Public pages: header, footer, homepage and the booking journey. Tokens
+   and shared components come from src/styles; this file only lays out the
+   public screens. */
 
 .public-shell {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 15% 0%, rgba(176, 141, 87, 0.1), transparent 45%),
-    var(--color-cream);
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: var(--surface-page);
+}
+
+.public-shell > main {
+  flex: 1;
+}
+
+.public-shell > main:focus {
+  outline: none;
 }
 
 /* ---- Header ------------------------------------------------------------ */
 
 .public-header {
-  background: var(--color-black);
-  color: var(--color-cream);
-  border-bottom: 3px solid var(--color-brass);
+  color: var(--text-on-dark);
+  background: var(--surface-ink);
+  border-bottom: 1px solid var(--color-brass);
 }
 
 .public-header-inner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  row-gap: 0.4rem;
-  gap: 1.1rem;
-  max-width: 72rem;
+  gap: var(--space-4);
+  max-width: var(--content-max);
   margin: 0 auto;
-  padding: 0.9rem 1.25rem;
+  padding: var(--space-3) var(--gutter);
 }
 
 .public-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.65rem;
-  color: var(--color-cream);
-  text-decoration: none;
+  gap: var(--space-3);
+  min-height: var(--target);
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 1.7rem;
+  font-size: 1.6rem;
   font-weight: 700;
   line-height: 1.1;
-  white-space: nowrap;
+  color: var(--text-on-dark);
+  text-decoration: none;
+}
+
+.public-brand:hover {
+  color: var(--color-brass-light);
+}
+
+.public-brand > span {
+  overflow-wrap: anywhere;
 }
 
 .public-brand-icon {
+  flex-shrink: 0;
   color: var(--color-brass);
-}
-
-.public-header-divider {
-  flex: 0 0 1px;
-  align-self: stretch;
-  margin: 0.2rem 0;
-  background: var(--color-brass);
-  opacity: 0.75;
 }
 
 .public-header-tagline {
   flex: 1;
+  padding-left: var(--space-4);
   font-family: var(--font-display);
-  font-size: 1.05rem;
-  color: #e3d6bc;
+  font-size: var(--text-md);
+  font-style: italic;
+  color: var(--text-on-dark-muted);
+  border-left: 1px solid var(--border-on-dark);
 }
 
 .public-header .language-switcher {
   margin-left: auto;
-  flex-shrink: 0;
 }
 
-/* ---- Notices ------------------------------------------------------------ */
+/* ---- Footer ------------------------------------------------------------ */
+
+.public-footer {
+  margin-top: var(--space-7);
+  color: var(--text-on-dark-muted);
+  background: var(--surface-ink);
+  border-top: 3px double var(--color-brass);
+}
+
+.public-footer-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-5) var(--gutter);
+  font-size: var(--text-sm);
+}
+
+.public-footer-inner p {
+  margin: 0;
+}
+
+.public-footer-brand {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--text-on-dark);
+}
+
+.public-footer-contact {
+  overflow-wrap: anywhere;
+}
+
+.public-footer-admin {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
+  margin-left: auto;
+  color: var(--text-on-dark-muted);
+}
+
+.public-footer-admin:hover {
+  color: var(--text-on-dark);
+}
+
+/* ---- Homepage ------------------------------------------------------------ */
+
+.home-page {
+  width: 100%;
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--space-7) var(--gutter) 0;
+}
+
+/* Hero: the signboard text on the left, "how to book" on an ink plate on
+   the right; one column below 960px. */
+.home-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: center;
+  margin-bottom: var(--space-8);
+}
+
+@media (min-width: 960px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+}
+
+.home-title {
+  margin: 0;
+  font-size: var(--text-display);
+  line-height: 1;
+  overflow-wrap: anywhere;
+}
+
+.home-tagline {
+  max-width: 34ch;
+  margin: var(--space-4) 0 var(--space-5);
+  font-family: var(--font-display);
+  font-size: clamp(1.15rem, 2.4vw, 1.45rem);
+  font-style: italic;
+  color: var(--color-brass-deep);
+}
+
+.home-hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.home-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin: var(--space-5) 0 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.home-contact div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.home-contact dt {
+  display: inline-flex;
+  color: var(--color-maroon);
+}
+
+.home-contact dd {
+  margin: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* The ink plate: a framed board with a brass hairline inside the edge. */
+.home-signboard {
+  position: relative;
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  color: var(--text-on-dark);
+  background: var(--surface-ink);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+.home-signboard::before {
+  content: '';
+  position: absolute;
+  inset: var(--space-2);
+  border: 1px solid var(--border-on-dark);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+}
+
+.home-signboard-pole {
+  position: absolute;
+  top: var(--space-5);
+  right: var(--space-5);
+}
+
+.home-signboard-title {
+  margin: 0 0 var(--space-5);
+  padding-right: 3.5rem;
+  font-size: var(--text-2xl);
+  color: var(--text-on-dark);
+}
+
+.home-steps {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: how;
+}
+
+.home-steps li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  column-gap: var(--space-3);
+  counter-increment: how;
+}
+
+/* Roman numerals, like a shop's numbered price board. */
+.home-steps li::before {
+  content: counter(how, upper-roman);
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 700;
+  color: var(--color-brass-light);
+  border: 1px solid var(--color-brass);
+  border-radius: 50%;
+}
+
+.home-steps strong {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+}
+
+.home-steps span {
+  font-size: var(--text-sm);
+  color: var(--text-on-dark-muted);
+}
+
+/* Catalog. */
+
+.home-catalog-header {
+  margin-bottom: var(--space-5);
+}
+
+.home-section-title {
+  margin: 0;
+  font-size: var(--text-3xl);
+}
+
+.home-catalog-intro {
+  margin: var(--space-2) 0 0;
+  color: var(--text-muted);
+}
+
+/* Price board: name, dotted leader and price on one line; description,
+   duration and the booking link below. Two columns from 1024px. */
+.price-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: var(--space-7);
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+  list-style: none;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-top: 3px double var(--color-brass);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+}
+
+@media (min-width: 1024px) {
+  .price-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.price-item {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-4) 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.price-item:last-child {
+  border-bottom: 0;
+}
+
+@media (min-width: 1024px) {
+  /* Last row of the two columns. */
+  .price-item:nth-last-child(2):nth-child(odd) {
+    border-bottom: 0;
+  }
+}
+
+.price-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.price-item-name {
+  margin: 0;
+  min-width: 0;
+  font-size: var(--text-xl);
+  overflow-wrap: anywhere;
+}
+
+.price-item-leader {
+  flex: 1;
+  min-width: var(--space-5);
+  border-bottom: 2px dotted var(--border-strong);
+  transform: translateY(-0.3em);
+}
+
+.price-item-price {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-maroon);
+  white-space: nowrap;
+}
+
+.price-item-description {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.price-item-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 var(--space-4);
+}
+
+.price-item-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.price-item-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target);
+  font-weight: 600;
+  color: var(--color-maroon);
+  text-decoration: none;
+}
+
+.price-item-link:hover {
+  color: var(--color-maroon-dark);
+  text-decoration: underline;
+}
+
+@media (max-width: 719px) {
+  .public-header-tagline {
+    display: none;
+  }
+
+  .public-header-inner {
+    gap: var(--space-3);
+    padding-block: var(--space-2);
+  }
+
+  .public-brand {
+    font-size: 1.25rem;
+    gap: var(--space-2);
+  }
+
+  .home-page {
+    padding-top: var(--space-5);
+  }
+
+  .home-hero {
+    margin-bottom: var(--space-7);
+  }
+
+  .home-hero-actions > .primary-button {
+    flex: 1 1 100%;
+  }
+
+  .home-signboard {
+    padding: var(--space-5) var(--space-4) var(--space-4);
+  }
+
+  .price-list {
+    padding-inline: var(--space-4);
+  }
+
+  .price-item-name,
+  .price-item-price {
+    font-size: var(--text-lg);
+  }
+
+  .public-footer-admin {
+    margin-left: 0;
+  }
+}
+
+/* ---- Booking notices (kept until the journey moves to .notice) ---- */
 
 .public-notice {
   display: flex;
@@ -81,169 +456,11 @@
   background: var(--surface-raised);
 }
 
-.public-notice p {
-  flex: 1 1 16rem;
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.public-notice--error {
-  border-left-color: var(--color-maroon);
-  background: #fbefee;
-}
-
-.public-notice--info {
-  border-left-color: var(--color-black);
-}
-
-.booking-loading {
-  color: var(--text-muted);
-}
-
-.booking-hint {
-  font-size: 0.875rem;
-  color: var(--text-muted);
-}
-
-/* ---- Homepage ------------------------------------------------------------ */
-
-.home-page {
-  max-width: 72rem;
-  margin: 0 auto;
-  padding: 2.5rem 1.25rem 3rem;
-}
-
-.home-hero {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 2rem;
-  margin-bottom: 2.5rem;
-}
-
-.home-hero-pole {
-  flex-shrink: 0;
-}
-
-.home-title {
-  margin: 0;
-  font-size: clamp(2.2rem, 5vw, 3.4rem);
-  line-height: 1.05;
-  color: var(--color-black);
-}
-
-.home-tagline {
-  margin: 0.4rem 0 1.25rem;
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  color: #8a6a3b;
-}
-
-.home-hero-actions {
-  margin-bottom: 1.25rem;
-}
-
-.home-contact {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1.5rem;
-  margin: 0;
-}
-
-.home-contact div {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.home-contact dt {
-  color: var(--color-maroon);
-  display: inline-flex;
-}
-
-.home-contact dd {
-  margin: 0;
-  color: var(--text-muted);
-}
-
-.home-catalog-header {
-  margin-bottom: 1.25rem;
-}
-
-.home-section-title {
-  margin: 0;
-  font-size: 1.9rem;
-}
-
-.home-services {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
-  gap: 1rem;
-}
-
-.home-service {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  padding: 1.25rem;
-}
-
-.home-service-icon {
-  margin-bottom: 0.35rem;
-}
-
-.home-service-name {
-  margin: 0;
-  font-size: 1.25rem;
-  overflow-wrap: anywhere;
-}
-
-.home-service-description {
-  margin: 0;
-  font-size: 0.9rem;
-  color: var(--text-muted);
-}
-
-.home-service-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin: auto 0 0;
-  padding-top: 0.75rem;
-  font-size: 0.9rem;
-}
-
-.home-service-duration {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--text-muted);
-}
-
-.home-service-price {
-  font-weight: 700;
-  color: var(--color-maroon-dark);
-}
-
-.public-shell .home-service-link {
-  margin-top: 0.75rem;
-  width: 100%;
-}
-
-.home-footnote {
-  margin-top: 2.5rem;
-  text-align: center;
-  font-size: 0.85rem;
-}
-
-.home-footnote a {
-  color: var(--text-muted);
-}
+.public-notice p { flex: 1 1 16rem; min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.public-notice--error { border-left-color: var(--color-maroon); background: #fbefee; }
+.public-notice--info { border-left-color: var(--color-black); }
+.booking-loading { color: var(--text-muted); }
+.booking-hint { font-size: 0.875rem; color: var(--text-muted); }
 
 /* ---- Booking journey ---------------------------------------------------- */
 
@@ -820,34 +1037,8 @@
 /* ---- Small screens ------------------------------------------------------ */
 
 @media (max-width: 720px) {
-  .public-header-divider,
-  .public-header-tagline {
-    display: none;
-  }
-
-  .public-header-inner {
-    padding: 0.7rem 1rem;
-  }
-
-  .public-brand {
-    font-size: 1.25rem;
-  }
-
-  .public-header .language-switcher-option {
-    font-size: 0.85rem;
-    padding: 0.3rem 0.45rem;
-  }
-
-  .home-page,
   .booking-page {
     padding: 1.25rem 0.85rem 2.5rem;
-  }
-
-  .home-hero {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-    padding: 1.4rem;
   }
 
   .booking-layout {
@@ -903,30 +1094,6 @@
 
   .slot-list {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  /* Catalog: compact cards, icon beside the name. */
-  .home-service {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    column-gap: 0.85rem;
-    row-gap: 0.25rem;
-    padding: 1rem;
-  }
-
-  .home-service-icon {
-    margin: 0;
-  }
-
-  .home-service-description,
-  .home-service-meta,
-  .public-shell .home-service-link {
-    grid-column: 1 / -1;
-  }
-
-  .home-service-meta {
-    padding-top: 0.35rem;
   }
 
   .booking-actions {

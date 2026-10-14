@@ -32,7 +32,8 @@
     "errors": {
       "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
       "generic": "Ocorreu um erro inesperado. Tente novamente."
-    }
+    },
+    "skipToContent": "Pular para o conteúdo"
   },
   "nav": {
     "ariaLabel": "Navegação administrativa",
@@ -58,7 +59,19 @@
     "phone": "Telefone",
     "adminLink": "Área do administrador",
     "servicesIntro": "Escolha um serviço para ver os horários livres.",
-    "durationAndPrice": "{{duration}} · {{price}}"
+    "durationAndPrice": "{{duration}} · {{price}}",
+    "eyebrow": "Barbearia",
+    "seeServices": "Ver serviços e preços",
+    "howTitle": "Como agendar",
+    "how": {
+      "service": "Escolha o serviço",
+      "serviceText": "Duração e preço aparecem antes de você decidir.",
+      "professional": "Escolha o profissional",
+      "professionalText": "Só aparece quem realiza o serviço escolhido.",
+      "time": "Escolha o horário",
+      "timeText": "Só aparecem horários realmente livres."
+    },
+    "servicesEyebrow": "Tabela de serviços"
   },
   "auth": {
     "subtitle": "Acesso administrativo",
