@@ -124,7 +124,6 @@ class AdminAppointmentCreationTest extends TestCase
             'outside_working_hours' => $this->local('11:30'), // 11:30–12:15 crosses lunch
             'off_grid' => $this->local('16:10'),
             'past' => $this->local('07:00'),
-            'outside_horizon' => $this->local('10:00', '2026-12-07'), // today + 35 days
         ];
 
         foreach ($cases as $reason => $start) {
@@ -135,6 +134,15 @@ class AdminAppointmentCreationTest extends TestCase
         }
 
         $this->assertSame(1, Appointment::query()->count());
+    }
+
+    public function test_the_admin_books_beyond_the_public_horizon(): void
+    {
+        $this->signIn();
+        $start = $this->local('10:00', '2026-12-07'); // today + 35 days, horizon 30
+
+        $this->createAdmin(['starts_at' => $start->toIso8601String()])->assertCreated();
+        $this->assertTrue(Appointment::query()->where('starts_at', $start->utc())->exists());
     }
 
     public function test_adjacent_intervals_are_accepted(): void

@@ -95,8 +95,7 @@ class AppointmentBooker
      * transaction protocol as bookPublic(), with the admin rules:
      *
      * - `scheduled`: `starts_at` must be one of the slots the engine offers
-     *   in the admin context — minimum notice ignored, horizon kept (seção
-     *   1: "limite de horizonte permanece para reservas futuras do admin"),
+     *   in the admin context — minimum notice and booking horizon ignored,
      *   never in the past, on the 15-minute grid.
      * - `now` ("Atender agora"): the start is the server's current instant,
      *   truncated to the minute, taken *inside* the transaction after the

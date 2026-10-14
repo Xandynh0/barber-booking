@@ -15,8 +15,9 @@ use Carbon\CarbonImmutable;
  * contexts. Rules (docs/planejamento-barbearia-mvp.md, seções 1, 5 e 16):
  *
  * - service and professional active, and linked to each other;
- * - the requested date (in the barbershop's timezone) within the booking
- *   horizon: today plus `booking_horizon_days - 1` days, in both contexts;
+ * - public: the requested date (in the barbershop's timezone) within the
+ *   booking horizon, today plus `booking_horizon_days - 1` days; admin:
+ *   no horizon;
  * - the whole service duration contained in a single working period;
  * - no intersection with schedule blocks or non-cancelled appointments,
  *   using half-open intervals `[start, end)` — a slot may start exactly
@@ -61,7 +62,8 @@ class AvailabilityEngine
         $timezone = $settings->timezone;
         $now = CarbonImmutable::now('UTC');
 
-        if (! $this->isWithinHorizon($date, $now, $timezone, (int) $settings->booking_horizon_days)) {
+        if ($context === AvailabilityContext::Public
+            && ! $this->isWithinHorizon($date, $now, $timezone, (int) $settings->booking_horizon_days)) {
             return [];
         }
 
@@ -205,7 +207,8 @@ class AvailabilityEngine
         }
 
         $localDate = $startsAt->setTimezone($settings->timezone)->format('Y-m-d');
-        if (! $this->isWithinHorizon($localDate, $now, $settings->timezone, (int) $settings->booking_horizon_days)) {
+        if ($context === AvailabilityContext::Public
+            && ! $this->isWithinHorizon($localDate, $now, $settings->timezone, (int) $settings->booking_horizon_days)) {
             return self::REFUSAL_OUTSIDE_HORIZON;
         }
 

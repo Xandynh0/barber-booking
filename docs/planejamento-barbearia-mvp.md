@@ -12,7 +12,7 @@ Stack definida: React com JavaScript, Laravel com PHP, MySQL, Docker e testes. E
 - No público, nome, e-mail e telefone são obrigatórios. No administrador, nome é obrigatório; e-mail e telefone são opcionais. Não existe conta do cliente. Sem e-mail, não criar notificação nem oferecer envio/reenvio.
 - Reserva confirmada imediatamente após a gravação. O e-mail comunica a confirmação; não é uma etapa de aprovação.
 - Cancelamento pelo cliente permitido até o limite de antecedência configurado em `cancel_min_notice_minutes` (padrão 0) e sempre antes do início. O administrador pode cancelar uma reserva confirmada mesmo após esse limite, com registro de autoria.
-- Agenda pública com horizonte de 30 dias e início mínimo 60 minutos no futuro; parâmetros configuráveis pelo administrador. O administrador ignora a antecedência mínima e pode usar “Atender agora”, cujo início é calculado pelo servidor no momento da gravação; não permite horário retroativo arbitrário. Limite de horizonte permanece para reservas futuras do admin.
+- Agenda pública com horizonte de 30 dias e início mínimo 60 minutos no futuro; parâmetros configuráveis pelo administrador. O administrador ignora a antecedência mínima e pode usar “Atender agora”, cujo início é calculado pelo servidor no momento da gravação; não permite horário retroativo arbitrário. O horizonte vale só para a agenda pública; o admin pode agendar além dele.
 - Horários públicos sugeridos a cada 15 minutos; “Atender agora” pode iniciar fora dessa grade, com fim calculado pela duração do serviço. A duração vem do serviço; a reserva precisa caber integralmente em um período de expediente.
 - Limite público de 3 reservas futuras confirmadas por e-mail OU telefone normalizado, configurável por `max_active_per_contact`. Verificar cada contato separadamente, contando também reservas do admin com o mesmo contato. Admin pode ultrapassar o teto; manter rate limit. Normalizar e-mail por trim/lowercase, sem remover pontos ou aliases; normalizar telefone para E.164. O limite usa contatos exatos normalizados, sem inferir identidade. Contatos falsos diferentes ainda contornam o limite: ele reduz abuso, não verifica identidade.
 - Sem pagamento, WhatsApp, recorrência, lista de espera, múltiplas unidades ou remarcação automática.
@@ -120,7 +120,7 @@ Não criar tabela de clientes no MVP: cada reserva guarda o contato daquele aten
 
 ## 5. Disponibilidade e prevenção de reservas simultâneas
 
-Um candidato é válido quando: serviço/profissional ativos e vinculados; início dentro do horizonte e, no público, da antecedência mínima; no admin, permitir início imediato calculado pelo servidor; intervalo completo contido num período de expediente; nenhuma interseção com bloqueios ou reservas não canceladas.
+Um candidato é válido quando: serviço/profissional ativos e vinculados; no público, início dentro do horizonte e da antecedência mínima; no admin, permitir início imediato calculado pelo servidor; intervalo completo contido num período de expediente; nenhuma interseção com bloqueios ou reservas não canceladas.
 
 Exemplo: serviço de 45 minutos, expediente 09h–12h e 13h–18h, reserva 10h–10h45. 09h15–10h é permitido; 09h30–10h15 conflita; 11h30–12h15 atravessa o intervalo de almoço e é recusado.
 
@@ -482,7 +482,7 @@ Data no passado ou fora do horizonte: `200` com `slots: []`.
 `401 UNAUTHENTICATED` na rota admin sem sessão; `429 RATE_LIMITED` na rota pública acima do limite.
 
 Regras: as da seção 5, com as decisões desta entrega:
-- **Horizonte nos dois contextos:** `booking_horizon_days` conta datas incluindo hoje (30 → hoje até hoje+29), pela data local da barbearia.
+- **Horizonte só no público:** `booking_horizon_days` conta datas incluindo hoje (30 → hoje até hoje+29), pela data local da barbearia. O contexto admin não aplica horizonte.
 - **Antecedência:** só no público, inclusiva no limite exato. O admin ignora `min_notice_minutes`, mas nunca recebe início no passado.
 - **Grade:** quartos fixos do relógio local (`:00`, `:15`, `:30`, `:45`); o início de cada período é arredondado para o próximo quarto.
 - **Intervalos `[início, fim)`:** atendimento adjacente permitido; reserva `cancelled` não ocupa horário.

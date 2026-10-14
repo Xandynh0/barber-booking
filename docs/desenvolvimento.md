@@ -254,7 +254,7 @@ Calcula os horários livres de um profissional para um serviço numa data. A con
 | Regra | Público | Admin |
 |---|---|---|
 | Serviço e profissional ativos e vinculados (senão `422`) | sim | sim |
-| Data dentro do horizonte: hoje até hoje + `booking_horizon_days` − 1, pela data local da barbearia | sim | sim |
+| Data dentro do horizonte: hoje até hoje + `booking_horizon_days` − 1, pela data local da barbearia | sim | **não** |
 | Antecedência mínima (`min_notice_minutes`), inclusiva no limite exato | sim | **não** |
 | Nunca oferece início no passado (início igual a "agora" é aceito) | sim (implícito na antecedência) | sim |
 | Duração inteira contida em **um** período de expediente (não atravessa almoço nem o fim) | sim | sim |
@@ -584,8 +584,8 @@ A listagem (dia e intervalo) nunca devolve e-mail, telefone nem preço. Esses da
 ### Regras (conferidas no código e nos testes)
 
 - **Lock primeiro.** Criação e mudança de status abrem a transação com `SELECT ... FOR UPDATE` em `business_settings`. Depois travam o profissional e, nas mudanças de status, a reserva. Toda leitura que depende da agenda (idempotência, revalidação pelo motor) vem depois. `LockingReadOrderTest` mostra o motivo com duas conexões MySQL reais: no REPEATABLE READ, uma leitura simples antes do lock congela uma visão antiga, e depois de obter o lock a transação ainda não vê a reserva que a outra conexão gravou.
-- **Mesmo motor, contexto admin.** `AvailabilityContext::Admin` ignora a antecedência mínima. Continuam valendo expediente, bloqueios, duração, conflitos, grade de 15 minutos, passado e horizonte. A recusa traz o motivo: `busy`, `blocked`, `outside_working_hours`, `off_grid`, `past` ou `outside_horizon`.
-- **Horizonte mantido no admin.** O planejamento, seção 1, diz: "Limite de horizonte permanece para reservas futuras do admin". O código segue o planejamento.
+- **Mesmo motor, contexto admin.** `AvailabilityContext::Admin` ignora a antecedência mínima e o horizonte público. Continuam valendo expediente, bloqueios, duração, conflitos, grade de 15 minutos e passado. A recusa traz o motivo: `busy`, `blocked`, `outside_working_hours`, `off_grid` ou `past`.
+- **Horizonte ignorado no admin.** Decisão de 2026-10-14: o administrador pode agendar além de `booking_horizon_days`. O horizonte limita só a agenda pública. O planejamento, seção 1, foi atualizado.
 - **"Atender agora".** O início é o instante do servidor, truncado ao minuto, calculado dentro da transação depois dos locks. Nunca vem do navegador e nunca é arredondado para a grade. O serviço inteiro precisa caber num período de trabalho, sem bloqueio nem reserva no caminho. Se não couber, a reserva é recusada com o motivo, nunca movida para outro horário. Este modo não cria notificação.
 - **Cliente de balcão.** O nome é obrigatório; e-mail e telefone são opcionais. Sem e-mail, não há notificação nem ação de reenvio. O admin não tem teto por contato.
 - **Status.**
@@ -666,7 +666,7 @@ Usada a partir do diretório do plugin, sem cópia para o repositório.
 - `AdminAgendaTest`: dia, fuso, recorte à meia-noite, filtro por profissional e por status, intervalo de datas e validação.
 - `AdminAppointmentCreationTest`:
   - criação sem e-mail e sem notificação;
-  - antecedência ignorada e horizonte mantido;
+  - antecedência e horizonte ignorados (reserva a hoje + 35 dias com horizonte 30);
   - recusas por ocupado, bloqueado, fora do expediente, fora da grade e passado;
   - idempotência;
   - "Atender agora" com segundos `:00`.
@@ -881,7 +881,7 @@ Achado na implementação (não um bug de teste, um bug de aplicação pego pelo
 
 ### Testes de disponibilidade
 
-`tests/Feature/AvailabilityTest.php` (28 testes, pelas duas rotas HTTP, MySQL real, relógio controlado com `travelTo`): formato do contrato e ausência de dados internos; rota admin exigindo sessão; parâmetro `context` não muda as regras públicas; validação de data (incluindo `2026-02-30`); serviço/profissional inativo ou inexistente e profissional sem o serviço, nos dois contextos, com mensagem em pt-BR e en; dia sem expediente; duração que precisa caber inteira no período; serviço maior que o período; almoço com o exemplo da seção 5 do planejamento; arredondamento para o próximo quarto de hora; bloqueio individual com intervalos adjacentes; fechamento da barbearia; bloqueio e reserva de outro profissional sem interferência; reserva confirmada bloqueia e cancelada não; reserva de duração diferente com conflito parcial; antecedência mínima exata (08:00 → 09:00 incluído; 08:00:01 → 09:15); admin ignorando a antecedência sem receber passado; datas passadas; horizonte contando hoje (30 → até hoje+29) nos dois contextos; horizonte pela data local e não UTC (22:30 em São Paulo já é o dia seguinte em UTC); data e dia da semana no fuso da barbearia (`Asia/Tokyo`); mesmo horário local em UTC diferente antes e depois do horário de verão (`America/New_York`); período que atravessa a mudança de horário usando tempo real; rate limit público.
+`tests/Feature/AvailabilityTest.php` (29 testes, pelas duas rotas HTTP, MySQL real, relógio controlado com `travelTo`): formato do contrato e ausência de dados internos; rota admin exigindo sessão; parâmetro `context` não muda as regras públicas; validação de data (incluindo `2026-02-30`); serviço/profissional inativo ou inexistente e profissional sem o serviço, nos dois contextos, com mensagem em pt-BR e en; dia sem expediente; duração que precisa caber inteira no período; serviço maior que o período; almoço com o exemplo da seção 5 do planejamento; arredondamento para o próximo quarto de hora; bloqueio individual com intervalos adjacentes; fechamento da barbearia; bloqueio e reserva de outro profissional sem interferência; reserva confirmada bloqueia e cancelada não; reserva de duração diferente com conflito parcial; antecedência mínima exata (08:00 → 09:00 incluído; 08:00:01 → 09:15); admin ignorando a antecedência sem receber passado; datas passadas; horizonte público contando hoje (30 → até hoje+29); admin sem horizonte; horizonte pela data local e não UTC (22:30 em São Paulo já é o dia seguinte em UTC); data e dia da semana no fuso da barbearia (`Asia/Tokyo`); mesmo horário local em UTC diferente antes e depois do horário de verão (`America/New_York`); período que atravessa a mudança de horário usando tempo real; rate limit público.
 
 Verificação dos próprios testes: cinco defeitos introduzidos de propósito no motor (intervalo fechado em vez de fim exclusivo, admin aplicando antecedência, horizonte calculado em UTC, reservas canceladas ocupando horário, grade sem arredondar para o quarto de hora) foram todos detectados — cada um derrubou entre 1 e 4 testes. O motor foi restaurado e conferido byte a byte depois.
 
