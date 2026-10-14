@@ -66,6 +66,7 @@ Route::prefix('v1/admin')->name('admin.')->group(function () {
         Route::get('/availability', [AvailabilityController::class, 'forAdmin'])->name('availability');
 
         Route::get('/agenda', [AgendaController::class, 'index'])->name('agenda');
+        Route::get('/appointments', [AgendaController::class, 'range'])->name('appointments.index');
         Route::get('/appointments/{appointment:public_id}', [AppointmentController::class, 'show'])->name('appointments.show');
         Route::middleware('throttle:admin-agenda-writes')->group(function () {
             Route::post('/appointments', [AppointmentController::class, 'store'])->name('appointments.store');

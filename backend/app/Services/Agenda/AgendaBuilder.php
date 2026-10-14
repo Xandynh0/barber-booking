@@ -35,15 +35,23 @@ use Illuminate\Support\Collection;
  * reservation on that day (so it is never hidden), ordered by name; or only
  * the one asked for. Cancelled appointments are listed too, with their
  * status, so the day keeps its history.
+ *
+ * `statuses` keeps only the reservations in those statuses; the
+ * professionals and the hours to draw do not change with it, so filtering
+ * never reshapes the grid.
+ *
+ * forRange() lists the reservations of several local days — for looking a
+ * week or a month ahead — without the grid fields.
  */
 class AgendaBuilder
 {
     public function __construct(private readonly AvailabilityEngine $engine) {}
 
     /**
+     * @param  array<int, string>|null  $statuses
      * @return array<string, mixed>
      */
-    public function forDate(string $date, ?int $professionalId): array
+    public function forDate(string $date, ?int $professionalId, ?array $statuses = null): array
     {
         $timezone = BusinessSettings::query()->firstOrFail()->timezone;
         $dayStart = CarbonImmutable::createFromFormat('!Y-m-d', $date, $timezone)->utc();
@@ -91,10 +99,12 @@ class AgendaBuilder
             ];
         })->values();
 
-        $appointmentRows = $appointments->map(fn (Appointment $appointment) => [
-            ...AdminAppointmentPresenter::summary($appointment, $now),
-            ...$this->visible($appointment->starts_at, $appointment->ends_at, $dayStart, $dayEnd),
-        ])->all();
+        $appointmentRows = $appointments
+            ->when($statuses !== null, fn (Collection $rows) => $rows->whereIn('status', $statuses))
+            ->map(fn (Appointment $appointment) => [
+                ...AdminAppointmentPresenter::summary($appointment, $now),
+                ...$this->visible($appointment->starts_at, $appointment->ends_at, $dayStart, $dayEnd),
+            ])->values()->all();
 
         $blockRows = $blocks->map(fn (ScheduleBlock $block) => [
             'id' => $block->id,
@@ -116,6 +126,43 @@ class AgendaBuilder
             'professionals' => $professionalRows->map(fn (array $row) => collect($row)->except('_periods')->all())->all(),
             'appointments' => $appointmentRows,
             'blocks' => $blockRows,
+        ];
+    }
+
+    /**
+     * Reservations intersecting the local days `from`..`to` (inclusive), in
+     * chronological order, with the professional's name — the same summary
+     * as the day view, never the contacts.
+     *
+     * @param  array<int, string>|null  $statuses
+     * @return array<string, mixed>
+     */
+    public function forRange(string $from, string $to, ?int $professionalId, ?array $statuses = null): array
+    {
+        $timezone = BusinessSettings::query()->firstOrFail()->timezone;
+        $rangeStart = CarbonImmutable::createFromFormat('!Y-m-d', $from, $timezone)->utc();
+        $rangeEnd = CarbonImmutable::createFromFormat('!Y-m-d', $to, $timezone)->addDay()->utc();
+        $now = CarbonImmutable::now('UTC');
+
+        $appointments = Appointment::query()
+            ->with(['confirmationNotification', 'professional'])
+            ->where('starts_at', '<', $rangeEnd)
+            ->where('ends_at', '>', $rangeStart)
+            ->when($professionalId !== null, fn ($query) => $query->where('professional_id', $professionalId))
+            ->when($statuses !== null, fn ($query) => $query->whereIn('status', $statuses))
+            ->orderBy('starts_at')
+            ->orderBy('id')
+            ->get();
+
+        return [
+            'from' => $from,
+            'to' => $to,
+            'timezone' => $timezone,
+            'range' => $this->interval($rangeStart, $rangeEnd),
+            'appointments' => $appointments->map(fn (Appointment $appointment) => [
+                ...AdminAppointmentPresenter::summary($appointment, $now),
+                'professional_name' => $appointment->professional->name,
+            ])->all(),
         ];
     }
 

@@ -31,6 +31,7 @@ class AdminAppointmentStatusTest extends TestCase
     {
         return [
             'agenda' => ['GET', '/api/v1/admin/agenda?date=2026-11-02'],
+            'range' => ['GET', '/api/v1/admin/appointments?from=2026-11-02&to=2026-11-08'],
             'details' => ['GET', '/api/v1/admin/appointments/{id}'],
             'create' => ['POST', '/api/v1/admin/appointments'],
             'cancel' => ['POST', '/api/v1/admin/appointments/{id}/cancel'],
@@ -235,6 +236,29 @@ class AdminAppointmentStatusTest extends TestCase
 
         Mail::assertSent(AppointmentConfirmationMail::class, 1);
         $this->assertSame(1, AppointmentNotification::query()->count());
+    }
+
+    public function test_the_resent_email_carries_a_freshly_signed_cancellation_link_that_opens(): void
+    {
+        Mail::fake();
+        $this->signIn();
+        $appointment = $this->appointmentAt('10:00');
+
+        $this->postJson("/api/v1/admin/appointments/{$appointment->public_id}/resend-confirmation")->assertOk();
+
+        Mail::assertSent(AppointmentConfirmationMail::class, function (AppointmentConfirmationMail $mail) use ($appointment) {
+            $url = parse_url($mail->cancellationUrl);
+            parse_str($url['query'], $query);
+
+            $this->assertSame("/cancelar/{$appointment->public_id}", $url['path']);
+            $this->assertSame((string) $appointment->starts_at->getTimestamp(), $query['expires']);
+            $this->assertNotEmpty($query['signature']);
+            $this->get($url['path'].'?'.$url['query'])->assertOk()->assertSee($appointment->public_id);
+
+            return true;
+        });
+        // Nothing about the link is stored: it is signed at each send.
+        $this->assertStringNotContainsString('signature', json_encode(AppointmentNotification::query()->sole()->toArray()));
     }
 
     public function test_resending_creates_the_notification_when_there_was_none(): void

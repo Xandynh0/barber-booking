@@ -41,6 +41,9 @@ class Appointment extends Model
     /** Final; allowed once the appointment has started (seção 3). */
     public const STATUS_NO_SHOW = 'no_show';
 
+    /** Every status, in the order the agenda filters list them. */
+    public const STATUSES = [self::STATUS_CONFIRMED, self::STATUS_COMPLETED, self::STATUS_NO_SHOW, self::STATUS_CANCELLED];
+
     public const CANCELLED_BY_CUSTOMER = 'customer';
 
     public const CANCELLED_BY_ADMIN = 'admin';

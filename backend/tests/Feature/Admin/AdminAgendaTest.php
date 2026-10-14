@@ -118,6 +118,77 @@ class AdminAgendaTest extends TestCase
             ->assertJsonPath('data.appointments.0.allowed_actions', []);
     }
 
+    public function test_filters_by_status_without_reshaping_the_grid(): void
+    {
+        $confirmed = $this->appointmentAt('09:00');
+        $cancelled = $this->appointmentAt('10:00', ['status' => 'cancelled', 'cancelled_by' => 'admin', 'cancelled_at' => now()]);
+        $noShow = $this->appointmentAt('11:00', ['status' => 'no_show']);
+
+        $all = $this->getJson('/api/v1/admin/agenda?date=2026-11-02')->json('data');
+        $this->assertSame([$confirmed->public_id, $cancelled->public_id, $noShow->public_id], array_column($all['appointments'], 'public_id'));
+
+        $some = $this->getJson('/api/v1/admin/agenda?date=2026-11-02&status[]=cancelled&status[]=no_show')->json('data');
+        $this->assertSame([$cancelled->public_id, $noShow->public_id], array_column($some['appointments'], 'public_id'));
+        $this->assertSame($all['hours'], $some['hours']);
+        $this->assertSame($all['professionals'], $some['professionals']);
+
+        $this->getJson('/api/v1/admin/agenda?date=2026-11-02&status[]=pending')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status.0'], 'error.fields');
+    }
+
+    public function test_a_range_of_days_lists_reservations_in_order_with_filters(): void
+    {
+        $bruno = $this->workingProfessional('Bruno Costa');
+        $before = $this->appointmentAt('09:00', [], null, '2026-11-01');
+        $first = $this->appointmentAt('17:00', [], null, '2026-11-02');
+        $brunos = $this->appointmentAt('09:00', [], $bruno, '2026-11-03');
+        $cancelled = $this->appointmentAt('10:00', ['status' => 'cancelled', 'cancelled_by' => 'customer', 'cancelled_at' => now()], null, '2026-11-04');
+        $after = $this->appointmentAt('09:00', [], null, '2026-11-05');
+
+        $data = $this->getJson('/api/v1/admin/appointments?from=2026-11-02&to=2026-11-04')
+            ->assertOk()
+            ->assertJsonPath('data.timezone', self::TZ)
+            ->assertJsonPath('data.range.starts_at', '2026-11-02T03:00:00+00:00')
+            ->assertJsonPath('data.range.ends_at', '2026-11-05T03:00:00+00:00')
+            ->json('data');
+        $this->assertSame([$first->public_id, $brunos->public_id, $cancelled->public_id], array_column($data['appointments'], 'public_id'));
+        $this->assertSame(['Rafael Almeida', 'Bruno Costa', 'Rafael Almeida'], array_column($data['appointments'], 'professional_name'));
+        $this->assertNotContains($before->public_id, array_column($data['appointments'], 'public_id'));
+        $this->assertNotContains($after->public_id, array_column($data['appointments'], 'public_id'));
+
+        // Like the day view, never the contacts or the price.
+        $item = $data['appointments'][0];
+        $this->assertArrayNotHasKey('customer', $item);
+        $this->assertArrayNotHasKey('customer_email', $item);
+        $this->assertArrayNotHasKey('customer_phone', $item);
+        $this->assertArrayNotHasKey('price', $item['service']);
+
+        $this->assertSame(
+            [$brunos->public_id],
+            array_column($this->getJson("/api/v1/admin/appointments?from=2026-11-02&to=2026-11-04&professional_id={$bruno->id}")->json('data.appointments'), 'public_id'),
+        );
+        $this->assertSame(
+            [$cancelled->public_id],
+            array_column($this->getJson('/api/v1/admin/appointments?from=2026-11-02&to=2026-11-04&status[]=cancelled')->json('data.appointments'), 'public_id'),
+        );
+    }
+
+    public function test_a_range_must_be_ordered_and_at_most_31_days(): void
+    {
+        $this->getJson('/api/v1/admin/appointments?from=2026-11-02&to=2026-12-02')->assertOk();
+
+        $this->getJson('/api/v1/admin/appointments?from=2026-11-02&to=2026-12-03')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['to'], 'error.fields');
+        $this->getJson('/api/v1/admin/appointments?from=2026-11-02&to=2026-11-01')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['to'], 'error.fields');
+        $this->getJson('/api/v1/admin/appointments?to=2026-11-01')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['from'], 'error.fields');
+    }
+
     public function test_blocks_and_closures_crossing_midnight_are_clipped_to_the_day(): void
     {
         ScheduleBlock::factory()->create([
