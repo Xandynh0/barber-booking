@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { BanIcon, CalendarIcon, ClockIcon, MenuIcon, ScissorsIcon, UsersIcon } from './PublicIcons'
-import '../styles/barber-theme.css'
 import './AdminShell.css'
 
 const LINKS = [
@@ -40,7 +39,7 @@ export function AdminShell({ children }) {
   }
 
   return (
-    <div className="admin-shell barber-theme">
+    <div className="admin-shell">
       <aside className="admin-sidebar">
         <div className="admin-sidebar-top">
           <span className="admin-sidebar-brand">

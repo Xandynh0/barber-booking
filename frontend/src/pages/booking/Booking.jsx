@@ -30,7 +30,6 @@ import {
   horizonDates,
   zonedDate,
 } from '../../utils/publicFormat'
-import '../../styles/barber-theme.css'
 import '../public.css'
 
 const STEPS = ['service', 'professional', 'datetime', 'customer', 'review']
@@ -399,7 +398,7 @@ function Booking() {
   )
 
   return (
-    <div className="public-shell barber-theme">
+    <div className="public-shell">
       <PublicHeader shopName={shopName} />
 
       <main className="booking-page">

@@ -5,7 +5,6 @@ import { getBusiness, listPublicServices } from '../api/publicBooking'
 import { PublicHeader } from '../components/PublicHeader'
 import { ArrowRightIcon, BarberPoleIcon, ClockIcon, MapPinIcon, PhoneIcon, ScissorsIcon } from '../components/PublicIcons'
 import { formatPrice } from '../utils/publicFormat'
-import '../styles/barber-theme.css'
 import './public.css'
 
 /**
@@ -48,7 +47,7 @@ function Home() {
   const shopName = business?.name || t('common.brand')
 
   return (
-    <div className="public-shell barber-theme">
+    <div className="public-shell">
       <PublicHeader shopName={shopName} />
 
       <main className="home-page">

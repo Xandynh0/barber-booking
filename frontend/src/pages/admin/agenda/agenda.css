@@ -57,7 +57,7 @@
   gap: 0.5rem;
 }
 
-.barber-theme .icon-button {
+.icon-button {
   display: inline-grid;
   place-items: center;
   width: 2.9rem;
@@ -70,12 +70,12 @@
   cursor: pointer;
 }
 
-.barber-theme .icon-button:hover:not(:disabled) {
+.icon-button:hover:not(:disabled) {
   border-color: var(--color-maroon);
   color: var(--color-maroon-dark);
 }
 
-.barber-theme .icon-button:disabled {
+.icon-button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -900,14 +900,14 @@
   gap: 0.9rem;
 }
 
-.barber-theme .field-error {
+.field-error {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--color-danger);
 }
 
-.barber-theme .link-button {
+.link-button {
   padding: 0;
   font: inherit;
   color: var(--color-maroon);
