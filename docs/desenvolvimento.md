@@ -605,7 +605,7 @@ A listagem (dia e intervalo) nunca devolve e-mail, telefone nem preço. Esses da
 - **Desktop (≥ 960 px).** Grade com coluna de horários e uma coluna por profissional, com intervalos, bloqueios (hachurados, com o motivo) e a linha "agora" no dia atual.
   - Escala de 2,2 px por minuto: um cartão de 30 minutos mostra horário e status, cliente e serviço. Cartões mais curtos mostram menos, e o texto completo fica no nome acessível e no `title`.
   - Duas reservas no mesmo horário (uma cancelada e a nova) ficam lado a lado. Numa faixa estreita, o status desce para baixo do horário.
-- **Celular.** Lista cronológica própria (sem espremer a grade), com profissional e serviço em cada cartão, e um único botão fixo "Novo agendamento" embaixo. No topo, idioma, avatar e Sair ficam numa linha só.
+- **Celular.** Lista cronológica própria (sem espremer a grade), com profissional e serviço em cada cartão. "Novo agendamento" fica no fluxo da página, no cabeçalho ao lado de "Atender agora", como no desktop: nenhum botão fixo cobre os cartões. No topo, idioma, avatar e Sair ficam numa linha só.
 - **Filtros na URL:** `data`, `profissional`, `servico` e `status`. Trocar status ou serviço filtra sem nova requisição. No celular, só a data fica visível; os outros três ficam em "Mais filtros".
 - **Estados:**
   - carregando, atualizando, vazio, sem expediente e sem resultado para o filtro;
@@ -685,8 +685,9 @@ Os dados `[TESTE-AGENDA]` foram removidos pelos IDs, o `CHECKSUM TABLE` ficou id
 3. **Cartões de 30 minutos cortavam o nome e escondiam o serviço,** e as linhas encolhiam umas sobre as outras. Correção: escala de 2,2 px/min, uma linha por informação com reticências e `flex-shrink: 0`.
 4. **"Atender agora" usava a mesma classe de perigo que "Cancelar reserva".** Agora é um botão secundário bordô, e as ações destrutivas ganharam ícone.
 5. **"Origem: Balcão" aparecia em toda reserva feita pelo admin,** mesmo com e-mail. Agora o texto é "Pela barbearia" / "By the shop".
-6. **"Novo agendamento" aparecia duas vezes no celular** (cabeçalho e botão fixo), e o topo ocupava três linhas. Agora só o botão fixo, e o topo usa uma linha.
+6. **"Novo agendamento" aparecia duas vezes no celular** (cabeçalho e botão fixo), e o topo ocupava três linhas. Agora há um só botão, e o topo usa uma linha.
 7. **A inicial do avatar era o primeiro caractere do nome,** mesmo quando era um símbolo. Agora é a primeira letra ou dígito.
+8. **O botão fixo "Novo agendamento" cobria cartões no celular** (em 320 px, parte do primeiro já na primeira tela). Avaliadas três saídas: reservar espaço embaixo só protege o último cartão; sticky também passa por cima durante a rolagem; no fluxo, nada fica coberto. Escolhida a terceira, a mais simples e igual ao desktop. Verificado no Edge em 320 e 390 px, PT e EN: todos os 8 cartões sem nada por cima (`elementFromPoint` em 9 pontos de cada), botão de 46 px de altura, alcançável por Tab com anel de foco e sem rolagem horizontal. Teste de regressão em `Agenda.test.jsx`.
 
 ### Testes
 

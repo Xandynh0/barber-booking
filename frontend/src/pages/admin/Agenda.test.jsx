@@ -444,15 +444,19 @@ describe('Agenda', () => {
       delete window.matchMedia
     })
 
-    it('phones get a chronological list and one fixed "new booking" button', async () => {
+    it('phones get a chronological list and "new booking" in the page flow, never over the cards', async () => {
       viewport(false)
       renderAgenda()
 
-      expect(await screen.findByRole('list', { name: 'Agenda' })).toBeInTheDocument()
+      const list = await screen.findByRole('list', { name: 'Agenda' })
       expect(screen.queryByRole('list', { name: 'Agenda de Rafael Almeida' })).not.toBeInTheDocument()
       const add = screen.getAllByRole('button', { name: 'Novo agendamento' })
       expect(add).toHaveLength(1)
-      expect(add[0]).toHaveClass('agenda-fab')
+      // Regression: a fixed button covered the first card at 320 px. It now
+      // sits in the page header, before the list, like on desktop.
+      expect(add[0].closest('header.agenda-header')).not.toBeNull()
+      expect(add[0].compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+      expect(document.querySelector('.agenda-fab')).toBeNull()
       expect(screen.getByRole('button', { name: 'Atender agora' })).toBeInTheDocument()
     })
 
@@ -491,7 +495,7 @@ describe('Agenda', () => {
       expect(screen.queryByRole('list', { name: 'Agenda' })).not.toBeInTheDocument()
       const add = screen.getAllByRole('button', { name: 'Novo agendamento' })
       expect(add).toHaveLength(1)
-      expect(add[0]).not.toHaveClass('agenda-fab')
+      expect(add[0].closest('header.agenda-header')).not.toBeNull()
       expect(screen.queryByText('Mais filtros')).not.toBeInTheDocument()
       expect(screen.getByLabelText('Profissional')).toBeVisible()
     })

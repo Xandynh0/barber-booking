@@ -238,13 +238,12 @@ function Agenda() {
             </div>
 
             <div className="agenda-actions">
-              {/* On narrow screens the same action is the fixed button at the bottom (1.png). */}
-              {wide && (
-                <button type="button" className="primary-button" onClick={() => setNewMode('scheduled')} disabled={!timeZone}>
-                  <PlusIcon size={18} />
-                  {t('agenda.actions.new')}
-                </button>
-              )}
+              {/* In the page flow on every width: a fixed button would cover
+                  whichever booking scrolls beneath it. */}
+              <button type="button" className="primary-button" onClick={() => setNewMode('scheduled')} disabled={!timeZone}>
+                <PlusIcon size={18} />
+                {t('agenda.actions.new')}
+              </button>
               <button type="button" className="secondary-button agenda-now-button" onClick={() => setNewMode('now')} disabled={!timeZone}>
                 <BoltIcon size={18} />
                 {t('agenda.actions.now')}
@@ -353,13 +352,6 @@ function Agenda() {
               </>
             )}
           </section>
-        )}
-
-        {!wide && timeZone && (
-          <button type="button" className="primary-button agenda-fab" onClick={() => setNewMode('scheduled')}>
-            <PlusIcon size={20} />
-            {t('agenda.actions.new')}
-          </button>
         )}
       </div>
 

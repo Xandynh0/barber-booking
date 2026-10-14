@@ -13,7 +13,6 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  padding-bottom: 5rem;
 }
 
 .agenda-muted {
@@ -447,15 +446,6 @@
   border-color: var(--color-maroon);
 }
 
-.barber-theme .agenda-fab {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  left: 1rem;
-  z-index: 20;
-  min-height: 3.25rem;
-}
-
 /* ---- Desktop grid --------------------------------------------------------------------------- */
 
 .agenda-grid-scroll {
@@ -862,6 +852,15 @@
   .agenda-more-filters-body > .agenda-filter:first-child {
     grid-column: 1 / -1;
   }
+
+  /* Both actions share the row and wrap to full width when it is narrow. */
+  .agenda-actions {
+    width: 100%;
+  }
+
+  .agenda-actions > button {
+    flex: 1 1 auto;
+  }
 }
 
 @media (max-width: 479px) {
@@ -924,8 +923,3 @@
   border-top: 1px solid var(--border-soft);
 }
 
-@media (min-width: 960px) {
-  .agenda-page {
-    padding-bottom: 0;
-  }
-}
