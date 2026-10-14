@@ -983,6 +983,10 @@
   border-top: 3px double var(--color-brass);
 }
 
+.booking-done .booking-intro {
+  margin-inline: auto;
+}
+
 .done-icon {
   margin: 0 auto var(--space-3);
 }
