@@ -27,6 +27,7 @@
 }
 
 .admin-panel {
+  min-width: 0;
   padding: var(--space-5);
 }
 

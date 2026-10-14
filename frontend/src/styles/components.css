@@ -543,8 +543,15 @@
 
 @media (min-width: 768px) {
   /* Durations, prices, dates and badges never break mid-value. */
-  .data-table td:not(:first-child) {
+  .data-table td:not(:first-child, .data-table-wrap) {
     white-space: nowrap;
+  }
+
+  /* Free text (a list of services, a reason) wraps within a readable
+     measure instead of widening the table. */
+  .data-table .data-table-wrap {
+    min-width: 12rem;
+    max-width: 28rem;
   }
 }
 

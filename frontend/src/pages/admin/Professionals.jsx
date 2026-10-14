@@ -264,7 +264,7 @@ function Professionals() {
                   {professionals.map((professional) => (
                     <tr key={professional.id}>
                       <td data-label={t('common.fields.name')}>{professional.name}</td>
-                      <td data-label={t('professionals.tableServices')}>
+                      <td className="data-table-wrap" data-label={t('professionals.tableServices')}>
                         {professional.services.length === 0 ? (
                           <span>{t('professionals.noneLabel')}</span>
                         ) : (

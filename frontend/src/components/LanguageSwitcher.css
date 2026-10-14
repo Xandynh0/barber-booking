@@ -5,14 +5,14 @@
 .language-switcher {
   display: inline-flex;
   flex-shrink: 0;
-  padding: 2px;
+  gap: 2px;
   background: var(--surface-raised);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
 }
 
 .language-switcher-option {
-  min-height: calc(var(--target) - 6px);
+  min-height: var(--target);
   min-width: var(--target);
   padding: 0.25rem 0.7rem;
   font-family: var(--font-body);
@@ -21,7 +21,7 @@
   color: var(--text);
   background: transparent;
   border: 0;
-  border-radius: calc(var(--radius-control) - 2px);
+  border-radius: calc(var(--radius-control) - 1px);
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }

@@ -73,6 +73,14 @@ describe('App routing (admin area)', () => {
     expect(await screen.findByText('Nenhum expediente, reserva ou bloqueio neste dia.')).toBeInTheDocument()
   })
 
+  it('offers a skip link straight to the admin page content', async () => {
+    renderAppAt('/admin/agenda')
+
+    const skip = await screen.findByRole('link', { name: 'Pular para o conteúdo' })
+    expect(skip).toHaveAttribute('href', '#conteudo')
+    expect(document.getElementById('conteudo').tagName).toBe('MAIN')
+  })
+
   it('renders the admin navigation and the services form at /admin/servicos', async () => {
     renderAppAt('/admin/servicos')
 

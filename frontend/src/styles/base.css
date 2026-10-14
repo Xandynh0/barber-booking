@@ -72,6 +72,13 @@ a:hover {
   outline-color: var(--focus-ring-on-dark);
 }
 
+/* Date and time inputs: Chromium moves keyboard focus into their inner
+   segments, where :focus-visible does not match the input itself. */
+input:is([type='date'], [type='time'], [type='datetime-local']):is(:focus, :focus-within) {
+  outline: var(--focus-width) solid var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
 /* Headings that receive focus programmatically (step changes, dialogs)
    show the ring only for keyboard users. */
 [tabindex='-1']:focus:not(:focus-visible) {
@@ -91,10 +98,13 @@ a:hover {
 }
 
 .skip-link {
-  position: absolute;
+  position: fixed;
   top: var(--space-2);
   left: var(--space-2);
   z-index: calc(var(--z-modal) + 1);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target);
   padding: var(--space-2) var(--space-4);
   font-weight: 600;
   color: var(--text-on-dark);
@@ -103,9 +113,12 @@ a:hover {
   transform: translateY(-200%);
 }
 
-.skip-link:focus-visible {
+/* Only keyboard users ever reach it, so plain :focus reveals it. */
+.skip-link:focus {
   transform: none;
   color: var(--text-on-dark);
+  outline: var(--focus-width) solid var(--color-brass-light);
+  outline-offset: var(--focus-offset);
 }
 
 @media (prefers-reduced-motion: reduce) {

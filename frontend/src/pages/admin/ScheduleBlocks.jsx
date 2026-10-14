@@ -387,7 +387,7 @@ function ScheduleBlocks() {
                         <td data-label={t('scheduleBlocks.tableEnd')}>
                           {formatInstant(item.ends_at, timezone, i18n.language)}
                         </td>
-                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td className="data-table-wrap" data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
                         <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
@@ -412,7 +412,7 @@ function ScheduleBlocks() {
                         <td data-label={t('scheduleBlocks.tableEnd')}>
                           {formatInstant(item.ends_at, timezone, i18n.language)}
                         </td>
-                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td className="data-table-wrap" data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
                         <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
