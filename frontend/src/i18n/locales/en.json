@@ -398,7 +398,12 @@
       "previousDays": "Previous days",
       "nextDays": "Next days",
       "noSlots": "no times",
-      "slotsHeading": "Available times"
+      "slotsHeading": "Available times",
+      "periods": {
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "evening": "Evening"
+      }
     },
     "customer": {
       "heading": "Your details",

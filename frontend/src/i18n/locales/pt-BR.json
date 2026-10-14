@@ -398,7 +398,12 @@
       "previousDays": "Dias anteriores",
       "nextDays": "Próximos dias",
       "noSlots": "sem horários",
-      "slotsHeading": "Horários disponíveis"
+      "slotsHeading": "Horários disponíveis",
+      "periods": {
+        "morning": "Manhã",
+        "afternoon": "Tarde",
+        "evening": "Noite"
+      }
     },
     "customer": {
       "heading": "Seus dados",

@@ -462,6 +462,34 @@ describe('Public booking journey', () => {
     expect(await screen.findByRole('button', { name: '10:00' })).toBeInTheDocument()
   })
 
+  it('moves focus to the first empty field when the details are incomplete', async () => {
+    const user = userEvent.setup()
+    renderBooking()
+    await chooseServiceAndProfessional(user)
+    await user.click(await screen.findByRole('button', { name: '10:00' }))
+    await user.click(screen.getByRole('button', { name: 'Continuar' }))
+    await user.type(await screen.findByLabelText('Nome'), 'Cliente Teste')
+    await user.click(screen.getByRole('button', { name: 'Continuar' }))
+
+    expect(screen.getByLabelText('E-mail')).toHaveFocus()
+    expect(screen.getByLabelText('E-mail')).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('groups the times of the day by period, in the barbershop time zone', async () => {
+    const user = userEvent.setup()
+    // 13:00Z, 17:30Z and 22:15Z are 10:00, 14:30 and 19:15 in São Paulo.
+    server.availability = (date) =>
+      json(200, { data: { timezone: 'America/Sao_Paulo', date, slots: slotsFor(date, ['13:00', '17:30', '22:15']) } })
+
+    renderBooking()
+    await chooseServiceAndProfessional(user)
+
+    const morning = await screen.findByRole('list', { name: /Manhã/ })
+    expect(within(morning).getByRole('button', { name: '10:00' })).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: /Tarde/ })).getByRole('button', { name: '14:30' })).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: /Noite/ })).getByRole('button', { name: '19:15' })).toBeInTheDocument()
+  })
+
   it('offers a retry when the catalog fails to load', async () => {
     const user = userEvent.setup()
     let failing = true
