@@ -87,7 +87,10 @@
       "service": "Service",
       "allServices": "All services",
       "status": "Status",
-      "allStatuses": "All statuses"
+      "allStatuses": "All statuses",
+      "more": "More filters",
+      "moreActive_one": "More filters · {{count}} active",
+      "moreActive_other": "More filters · {{count}} active"
     },
     "actions": {
       "new": "New booking",

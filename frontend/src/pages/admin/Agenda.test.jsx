@@ -456,6 +456,32 @@ describe('Agenda', () => {
       expect(screen.getByRole('button', { name: 'Atender agora' })).toBeInTheDocument()
     })
 
+    it('phones keep the date in view and fold the other filters, saying how many are active', async () => {
+      viewport(false)
+      const user = userEvent.setup()
+      renderAgenda()
+      await screen.findByRole('list', { name: 'Agenda' })
+
+      expect(document.getElementById('agenda-date-input').closest('details')).toBeNull()
+      const more = screen.getByText('Mais filtros').closest('details')
+      expect(more).not.toHaveAttribute('open')
+      expect(within(more).getByLabelText('Status')).toBeInTheDocument()
+
+      await user.click(screen.getByText('Mais filtros'))
+      expect(more).toHaveAttribute('open')
+      await user.selectOptions(within(more).getByLabelText('Status'), 'cancelled')
+      expect(within(more).getByText('Mais filtros · 1 ativo')).toBeInTheDocument()
+    })
+
+    it('phones open the folded filters when the URL already filters', async () => {
+      viewport(false)
+      renderAgenda(`/admin/agenda?data=${DAY}&status=cancelled&profissional=7`)
+      await screen.findByRole('list', { name: 'Agenda' })
+
+      const summary = screen.getByText('Mais filtros · 2 ativos')
+      expect(summary.closest('details')).toHaveAttribute('open')
+    })
+
     it('desktop gets one column per professional and the action in the header', async () => {
       viewport(true)
       renderAgenda()
@@ -466,6 +492,8 @@ describe('Agenda', () => {
       const add = screen.getAllByRole('button', { name: 'Novo agendamento' })
       expect(add).toHaveLength(1)
       expect(add[0]).not.toHaveClass('agenda-fab')
+      expect(screen.queryByText('Mais filtros')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Profissional')).toBeVisible()
     })
   })
 })

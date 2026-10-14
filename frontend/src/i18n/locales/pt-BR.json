@@ -87,7 +87,10 @@
       "service": "Serviço",
       "allServices": "Todos os serviços",
       "status": "Status",
-      "allStatuses": "Todos os status"
+      "allStatuses": "Todos os status",
+      "more": "Mais filtros",
+      "moreActive_one": "Mais filtros · {{count}} ativo",
+      "moreActive_other": "Mais filtros · {{count}} ativos"
     },
     "actions": {
       "new": "Novo agendamento",

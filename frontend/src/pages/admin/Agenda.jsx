@@ -50,6 +50,8 @@ function Agenda() {
   const professionalId = params.get('profissional') ?? ''
   const serviceFilter = params.get('servico') ?? ''
   const statusFilter = params.get('status') ?? ''
+  const activeFilters = [professionalId, serviceFilter, statusFilter].filter(Boolean).length
+  const [filtersOpen, setFiltersOpen] = useState(activeFilters > 0)
 
   const setParam = useCallback(
     (name, value) => {
@@ -154,6 +156,45 @@ function Agenda() {
     refresh()
   }
 
+  const refineFilters = (
+    <>
+      <div className="agenda-filter">
+        <label htmlFor={filterIds.professional}>{t('agenda.filters.professional')}</label>
+        <select id={filterIds.professional} value={professionalId} onChange={(event) => setParam('profissional', event.target.value)}>
+          <option value="">{t('agenda.filters.allProfessionals')}</option>
+          {catalog.professionals.map((professional) => (
+            <option key={professional.id} value={professional.id}>
+              {professional.name}
+              {!professional.is_active ? ` (${t('agenda.inactive')})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="agenda-filter">
+        <label htmlFor={filterIds.service}>{t('agenda.filters.service')}</label>
+        <select id={filterIds.service} value={serviceFilter} onChange={(event) => setParam('servico', event.target.value)}>
+          <option value="">{t('agenda.filters.allServices')}</option>
+          {catalog.services.map((service) => (
+            <option key={service.id} value={service.id}>
+              {service.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="agenda-filter">
+        <label htmlFor={filterIds.status}>{t('agenda.filters.status')}</label>
+        <select id={filterIds.status} value={statusFilter} onChange={(event) => setParam('status', event.target.value)}>
+          <option value="">{t('agenda.filters.allStatuses')}</option>
+          {STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {t(`agenda.status.${status}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+    </>
+  )
+
   return (
     <AdminShell>
       <div className="agenda-page">
@@ -226,40 +267,17 @@ function Agenda() {
               />
             </span>
           </div>
-          <div className="agenda-filter">
-            <label htmlFor={filterIds.professional}>{t('agenda.filters.professional')}</label>
-            <select id={filterIds.professional} value={professionalId} onChange={(event) => setParam('profissional', event.target.value)}>
-              <option value="">{t('agenda.filters.allProfessionals')}</option>
-              {catalog.professionals.map((professional) => (
-                <option key={professional.id} value={professional.id}>
-                  {professional.name}
-                  {!professional.is_active ? ` (${t('agenda.inactive')})` : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="agenda-filter">
-            <label htmlFor={filterIds.service}>{t('agenda.filters.service')}</label>
-            <select id={filterIds.service} value={serviceFilter} onChange={(event) => setParam('servico', event.target.value)}>
-              <option value="">{t('agenda.filters.allServices')}</option>
-              {catalog.services.map((service) => (
-                <option key={service.id} value={service.id}>
-                  {service.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="agenda-filter">
-            <label htmlFor={filterIds.status}>{t('agenda.filters.status')}</label>
-            <select id={filterIds.status} value={statusFilter} onChange={(event) => setParam('status', event.target.value)}>
-              <option value="">{t('agenda.filters.allStatuses')}</option>
-              {STATUSES.map((status) => (
-                <option key={status} value={status}>
-                  {t(`agenda.status.${status}`)}
-                </option>
-              ))}
-            </select>
-          </div>
+          {wide ? (
+            refineFilters
+          ) : (
+            // On a phone the date stays in view and the rest folds away, so
+            // the day's bookings start on the first screen (opened when a
+            // filter is already active, and the summary says how many).
+            <details className="agenda-more-filters" open={filtersOpen} onToggle={(event) => setFiltersOpen(event.currentTarget.open)}>
+              <summary>{activeFilters ? t('agenda.filters.moreActive', { count: activeFilters }) : t('agenda.filters.more')}</summary>
+              <div className="agenda-more-filters-body">{refineFilters}</div>
+            </details>
+          )}
         </section>
 
         {flash && (

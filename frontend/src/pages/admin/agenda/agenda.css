@@ -149,6 +149,45 @@
   padding-left: 2.3rem;
 }
 
+/* Phone: professional, service and status fold under the date. */
+.agenda-more-filters {
+  grid-column: 1 / -1;
+}
+
+.agenda-more-filters > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.agenda-more-filters > summary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.agenda-more-filters[open] > summary::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.agenda-more-filters > summary:focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.agenda-more-filters-body {
+  display: grid;
+  padding-top: 0.5rem;
+}
+
 .agenda-field :is(input, select)[aria-invalid='true'] {
   border-color: var(--color-danger);
 }
@@ -806,16 +845,21 @@
   margin-top: 0.85rem;
 }
 
-/* Phones: date and professional on their own rows, service and status
-   side by side, so the list starts higher. */
+/* Phones: the date on its own row; under "more filters", professional
+   on its own row and service and status side by side. */
 @media (max-width: 959px) {
   .agenda-filters {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem 0.75rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
     padding: 0.75rem;
   }
 
-  .agenda-filter:nth-child(-n + 2) {
+  .agenda-more-filters-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+  }
+
+  .agenda-more-filters-body > .agenda-filter:first-child {
     grid-column: 1 / -1;
   }
 }

@@ -606,7 +606,7 @@ A listagem (dia e intervalo) nunca devolve e-mail, telefone nem preço. Esses da
   - Escala de 2,2 px por minuto: um cartão de 30 minutos mostra horário e status, cliente e serviço. Cartões mais curtos mostram menos, e o texto completo fica no nome acessível e no `title`.
   - Duas reservas no mesmo horário (uma cancelada e a nova) ficam lado a lado. Numa faixa estreita, o status desce para baixo do horário.
 - **Celular.** Lista cronológica própria (sem espremer a grade), com profissional e serviço em cada cartão, e um único botão fixo "Novo agendamento" embaixo. No topo, idioma, avatar e Sair ficam numa linha só.
-- **Filtros na URL:** `data`, `profissional`, `servico` e `status`. Trocar status ou serviço filtra sem nova requisição.
+- **Filtros na URL:** `data`, `profissional`, `servico` e `status`. Trocar status ou serviço filtra sem nova requisição. No celular, só a data fica visível; os outros três ficam em "Mais filtros".
 - **Estados:**
   - carregando, atualizando, vazio, sem expediente e sem resultado para o filtro;
   - erro com "Tentar novamente";
@@ -649,6 +649,34 @@ Usada a partir do diretório do plugin, sem cópia para o repositório.
 - Rolagem horizontal da tabela no celular: preferida a lista própria.
 - `scroll-behavior: smooth`: movimento sem ganho.
 - Checagem de modo escuro: o app não tem modo escuro.
+
+### Revisão com frontend-design e design-taste-frontend (14/10/2026)
+
+Hierarquia seguida: regras funcionais e de acessibilidade → identidade old barber (`docs/design`) → ui-ux-pro-max → frontend-design (implementação) → design-taste-frontend (crítica final). Nenhuma recomendação das skills substituiu a paleta (creme, bordô, preto/marrom escuro, latão), as fontes ou a consistência com a área pública.
+
+**frontend-design:**
+- Direção declarada: "tradicional/artesanal + utilitária", já fixada por `docs/design`. A âncora visual é o filete bordô à esquerda dos cartões, com os títulos em serifa e a grade em creme. Mantida.
+- Aplicado: componentes existentes reaproveitados, só variáveis CSS do tema, HTML semântico (`<details>`/`<summary>` nativos para os filtros dobráveis), sem bibliotecas novas e verificação real de foco, teclado e larguras.
+- Rejeitado: animação de entrada, textura/grão e assimetria proposital. Numa agenda operacional, isso só atrapalharia a leitura.
+
+**design-taste-frontend (crítica):**
+- **Aplicado: densidade no celular.** Em 320 e 390 px, título, navegação, "Atender agora" e os quatro filtros ocupavam a primeira tela inteira, e nenhuma reserva aparecia sem rolar. Agora a data continua visível, e profissional, serviço e status ficam em "Mais filtros". O resumo informa quantos filtros estão ativos ("Mais filtros · 2 ativos"), e o bloco já abre quando a URL traz filtro. Resultado medido no Edge: a primeira reserva começa em y=517 (390×844) e y=548 (320×640, em português). Antes ficava abaixo da dobra. O desktop não mudou.
+- **Rejeitado:**
+  - Tailwind, fontes Geist/Satoshi e a proibição de serifa em dashboards: contrariam a identidade aprovada, que usa serifa nos títulos e fonte do sistema no texto.
+  - Framer Motion, micro-animações contínuas, botões magnéticos, bento grid e glassmorphism: o pedido proíbe animação exagerada e bibliotecas novas.
+  - Skeleton com brilho no carregamento: o texto em `role="status"` é acessível e honesto, e a agenda mantém o conteúdo anterior ao atualizar. O brilho seria movimento sem ganho.
+  - Deslocamento no `:active`: os botões são compartilhados com as outras telas do admin. Mudá-los só na agenda quebraria a consistência, e isso fica para o redesign geral.
+  - `100dvh` no lugar de `100vh` no shell: só afeta a altura mínima, e nenhum defeito foi observado. Mudaria todas as telas do admin.
+- **Conferido sem mudança:** sem `#000` puro (o preto do tema é `#1c1a17`), sem emoji, uma só cor de destaque (bordô) com latão como detalhe, estados de carregando, vazio, erro, sucesso e conflito presentes.
+
+**Verificação (Edge headless, proxy real, login pelo formulário):** desktop 1366, 390 e 320 px, em português e inglês. 53 verificações sem falha:
+- nenhuma rolagem horizontal em agenda, filtros abertos, vazio, detalhes e novo agendamento;
+- nenhum alvo de toque menor que 44 px no celular;
+- filtros dobrados por padrão;
+- Enter no resumo abre os filtros;
+- o foco volta ao cartão ao fechar os detalhes.
+
+Os dados `[TESTE-AGENDA]` foram removidos pelos IDs, o `CHECKSUM TABLE` ficou idêntico à linha de base e a mensagem do Mailpit foi apagada pelo ID (total 0).
 
 ### Bugs encontrados nesta entrega
 
