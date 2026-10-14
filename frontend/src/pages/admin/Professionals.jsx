@@ -134,24 +134,24 @@ function Professionals() {
 
   return (
     <AdminLayout>
-      <div className="admin-content">
-        <section className="admin-card">
+      <div className="admin-content admin-content--split">
+        <section className="panel admin-panel">
           <h2>{editingId ? t('professionals.editTitle') : t('professionals.newTitle')}</h2>
 
           {formError && (
-            <p className="admin-form-error" role="alert">
+            <p className="notice notice--error" role="alert">
               {formError}
             </p>
           )}
           {successMessage && (
-            <p className="admin-success" role="status">
+            <p className="notice notice--success" role="status">
               {successMessage}
             </p>
           )}
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="admin-form-grid">
-              <div className="admin-field admin-field--full">
+              <div className="field admin-field--full">
                 <label htmlFor={nameId}>{t('common.fields.name')}</label>
                 <input
                   id={nameId}
@@ -162,13 +162,13 @@ function Professionals() {
                   required
                 />
                 {fieldErrors.name && (
-                  <span id={`${nameId}-error`} className="admin-field-error">
+                  <span id={`${nameId}-error`} className="field-error">
                     {fieldErrors.name[0]}
                   </span>
                 )}
               </div>
 
-              <div className="admin-field admin-field--full">
+              <div className="field admin-field--full">
                 <label htmlFor={descriptionId}>{t('common.fields.descriptionOptional')}</label>
                 <textarea
                   id={descriptionId}
@@ -178,19 +178,19 @@ function Professionals() {
                   aria-describedby={fieldErrors.description ? `${descriptionId}-error` : undefined}
                 />
                 {fieldErrors.description && (
-                  <span id={`${descriptionId}-error`} className="admin-field-error">
+                  <span id={`${descriptionId}-error`} className="field-error">
                     {fieldErrors.description[0]}
                   </span>
                 )}
               </div>
 
-              <fieldset className="admin-field admin-field--full">
+              <fieldset className="field admin-field--full">
                 <legend>{t('professionals.servicesOffered')}</legend>
                 {services !== null && services.length === 0 && <p>{t('professionals.noServicesYet')}</p>}
                 {services !== null && services.length > 0 && (
                   <div className="admin-service-picker">
                     {services.map((service) => (
-                      <label key={service.id} className="admin-service-picker-option">
+                      <label key={service.id} className="choice">
                         <input
                           type="checkbox"
                           checked={form.service_ids.includes(service.id)}
@@ -203,11 +203,11 @@ function Professionals() {
                   </div>
                 )}
                 {fieldErrors.service_ids && (
-                  <span className="admin-field-error">{fieldErrors.service_ids[0]}</span>
+                  <span className="field-error">{fieldErrors.service_ids[0]}</span>
                 )}
               </fieldset>
 
-              <div className="admin-field admin-field-checkbox admin-field--full">
+              <div className="field-checkbox admin-field--full">
                 <input
                   id={activeId}
                   type="checkbox"
@@ -219,11 +219,11 @@ function Professionals() {
             </div>
 
             <div className="admin-form-actions">
-              <button type="submit" className="admin-button" disabled={submitting}>
+              <button type="submit" className="primary-button" disabled={submitting}>
                 {submitting ? t('common.actions.saving') : editingId ? t('common.actions.save') : t('common.actions.create')}
               </button>
               {editingId && (
-                <button type="button" className="admin-button admin-button--secondary" onClick={startCreate}>
+                <button type="button" className="secondary-button" onClick={startCreate}>
                   {t('common.actions.cancel')}
                 </button>
               )}
@@ -231,25 +231,25 @@ function Professionals() {
           </form>
         </section>
 
-        <section className="admin-card">
+        <section className="panel admin-panel">
           <h2>{t('professionals.listTitle')}</h2>
 
-          {loading && <p>{t('common.actions.loading')}</p>}
+          {loading && <p role="status" className="loading-state">{t('common.actions.loading')}</p>}
 
           {loadError && (
-            <div role="alert">
-              <p className="admin-form-error">{loadErrorMessage}</p>
-              <button type="button" className="admin-button" onClick={loadAll}>
+            <div role="alert" className="notice notice--error">
+              <p>{loadErrorMessage}</p>
+              <button type="button" className="secondary-button" onClick={loadAll}>
                 {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {professionals !== null && professionals.length === 0 && <p>{t('professionals.emptyState')}</p>}
+          {professionals !== null && professionals.length === 0 && <p className="empty-state"><span className="empty-state-title">{t('professionals.emptyState')}</span></p>}
 
           {professionals !== null && professionals.length > 0 && (
             <div className="admin-table-wrapper">
-              <table className="admin-table">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th scope="col">{t('common.fields.name')}</th>
@@ -280,15 +280,14 @@ function Professionals() {
                         )}
                       </td>
                       <td data-label={t('common.fields.status')}>
-                        <span className="admin-status" data-active={professional.is_active}>
-                          <span className="admin-status-dot" aria-hidden="true" />
+                        <span className={`badge ${professional.is_active ? 'badge--success' : 'badge--muted'}`}>
                           {professional.is_active ? t('common.fields.statusActive') : t('common.fields.statusInactive')}
                         </span>
                       </td>
-                      <td data-label={t('common.actions.actionsColumn')}>
+                      <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
                         <button
                           type="button"
-                          className="admin-button admin-button--secondary"
+                          className="secondary-button"
                           onClick={() => startEdit(professional)}
                         >
                           {t('common.actions.edit')}

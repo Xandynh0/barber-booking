@@ -185,13 +185,13 @@ export function NewAppointment({ mode, date: initialDate, timeZone, services, pr
     >
       <form ref={formRef} className="agenda-form" onSubmit={submit} noValidate>
         {isNow && (
-          <div className="agenda-notice agenda-notice--info">
+          <div className="notice notice--info agenda-info">
             <p>{t('agenda.form.nowHint')}</p>
             <p>{t('agenda.form.nowNoEmail')}</p>
           </div>
         )}
 
-        <div className="agenda-field">
+        <div className="field">
           <label htmlFor={ids.service}>{t('agenda.form.service')}</label>
           <select
             id={ids.service}
@@ -218,7 +218,7 @@ export function NewAppointment({ mode, date: initialDate, timeZone, services, pr
           )}
         </div>
 
-        <div className="agenda-field">
+        <div className="field">
           <label htmlFor={ids.professional}>{t('agenda.form.professional')}</label>
           <select
             id={ids.professional}
@@ -248,12 +248,12 @@ export function NewAppointment({ mode, date: initialDate, timeZone, services, pr
 
         {!isNow && (
           <div className="agenda-form-row">
-            <div className="agenda-field">
+            <div className="field">
               <label htmlFor={ids.date}>{t('agenda.form.date')}</label>
               <input id={ids.date} type="date" value={date} onChange={(event) => setDate(event.target.value)} required />
             </div>
 
-            <div className="agenda-field">
+            <div className="field">
               <label htmlFor={ids.time}>{t('agenda.form.time')}</label>
               <select
                 id={ids.time}
@@ -306,7 +306,7 @@ export function NewAppointment({ mode, date: initialDate, timeZone, services, pr
           { field: 'customer_email', id: ids.email, label: t('agenda.form.customerEmail'), type: 'email', autoComplete: 'off', hint: isNow ? null : t('agenda.form.emailHint') },
           { field: 'customer_phone', id: ids.phone, label: t('agenda.form.customerPhone'), type: 'tel', autoComplete: 'off' },
         ].map(({ field, id, label, type, autoComplete, required, hint }) => (
-          <div key={field} className="agenda-field">
+          <div key={field} className="field">
             <label htmlFor={id}>{label}</label>
             <input
               id={id}
@@ -333,7 +333,7 @@ export function NewAppointment({ mode, date: initialDate, timeZone, services, pr
 
         <div aria-live="polite">
           {notice && (
-            <p className={`agenda-notice agenda-notice--${notice.kind}`} role="alert">
+            <p className={`notice notice--${notice.kind}`} role="alert">
               {notice.text}
             </p>
           )}

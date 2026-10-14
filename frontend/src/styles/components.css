@@ -541,6 +541,13 @@
   background: var(--surface);
 }
 
+@media (min-width: 768px) {
+  /* Durations, prices, dates and badges never break mid-value. */
+  .data-table td:not(:first-child) {
+    white-space: nowrap;
+  }
+}
+
 .data-table .data-table-actions {
   text-align: right;
   white-space: nowrap;

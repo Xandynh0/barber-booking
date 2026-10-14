@@ -145,24 +145,24 @@ function Services() {
 
   return (
     <AdminLayout>
-      <div className="admin-content">
-        <section className="admin-card">
+      <div className="admin-content admin-content--split">
+        <section className="panel admin-panel">
           <h2>{editingId ? t('services.editTitle') : t('services.newTitle')}</h2>
 
           {formError && (
-            <p className="admin-form-error" role="alert">
+            <p className="notice notice--error" role="alert">
               {formError}
             </p>
           )}
           {successMessage && (
-            <p className="admin-success" role="status">
+            <p className="notice notice--success" role="status">
               {successMessage}
             </p>
           )}
 
           <form onSubmit={handleSubmit} noValidate>
             <div className="admin-form-grid">
-              <div className="admin-field admin-field--full">
+              <div className="field admin-field--full">
                 <label htmlFor={nameId}>{t('common.fields.name')}</label>
                 <input
                   id={nameId}
@@ -173,13 +173,13 @@ function Services() {
                   required
                 />
                 {fieldErrors.name && (
-                  <span id={`${nameId}-error`} className="admin-field-error">
+                  <span id={`${nameId}-error`} className="field-error">
                     {fieldErrors.name[0]}
                   </span>
                 )}
               </div>
 
-              <div className="admin-field admin-field--full">
+              <div className="field admin-field--full">
                 <label htmlFor={descriptionId}>{t('common.fields.descriptionOptional')}</label>
                 <textarea
                   id={descriptionId}
@@ -189,13 +189,13 @@ function Services() {
                   aria-describedby={fieldErrors.description ? `${descriptionId}-error` : undefined}
                 />
                 {fieldErrors.description && (
-                  <span id={`${descriptionId}-error`} className="admin-field-error">
+                  <span id={`${descriptionId}-error`} className="field-error">
                     {fieldErrors.description[0]}
                   </span>
                 )}
               </div>
 
-              <div className="admin-field">
+              <div className="field">
                 <label htmlFor={durationId}>{t('services.durationLabel')}</label>
                 <input
                   id={durationId}
@@ -209,13 +209,13 @@ function Services() {
                   required
                 />
                 {fieldErrors.duration_minutes && (
-                  <span id={`${durationId}-error`} className="admin-field-error">
+                  <span id={`${durationId}-error`} className="field-error">
                     {fieldErrors.duration_minutes[0]}
                   </span>
                 )}
               </div>
 
-              <div className="admin-field">
+              <div className="field">
                 <label htmlFor={priceId}>{t('services.priceLabel')}</label>
                 <input
                   id={priceId}
@@ -228,13 +228,13 @@ function Services() {
                   required
                 />
                 {fieldErrors.price && (
-                  <span id={`${priceId}-error`} className="admin-field-error">
+                  <span id={`${priceId}-error`} className="field-error">
                     {fieldErrors.price[0]}
                   </span>
                 )}
               </div>
 
-              <div className="admin-field admin-field-checkbox admin-field--full">
+              <div className="field-checkbox admin-field--full">
                 <input
                   id={activeId}
                   type="checkbox"
@@ -246,11 +246,11 @@ function Services() {
             </div>
 
             <div className="admin-form-actions">
-              <button type="submit" className="admin-button" disabled={submitting}>
+              <button type="submit" className="primary-button" disabled={submitting}>
                 {submitting ? t('common.actions.saving') : editingId ? t('common.actions.save') : t('common.actions.create')}
               </button>
               {editingId && (
-                <button type="button" className="admin-button admin-button--secondary" onClick={startCreate}>
+                <button type="button" className="secondary-button" onClick={startCreate}>
                   {t('common.actions.cancel')}
                 </button>
               )}
@@ -258,25 +258,25 @@ function Services() {
           </form>
         </section>
 
-        <section className="admin-card">
+        <section className="panel admin-panel">
           <h2>{t('services.listTitle')}</h2>
 
-          {services === null && !loadError && <p>{t('common.actions.loading')}</p>}
+          {services === null && !loadError && <p role="status" className="loading-state">{t('common.actions.loading')}</p>}
 
           {loadError && (
-            <div role="alert">
-              <p className="admin-form-error">{loadErrorMessage}</p>
-              <button type="button" className="admin-button" onClick={loadServices}>
+            <div role="alert" className="notice notice--error">
+              <p>{loadErrorMessage}</p>
+              <button type="button" className="secondary-button" onClick={loadServices}>
                 {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {services !== null && services.length === 0 && <p>{t('services.emptyState')}</p>}
+          {services !== null && services.length === 0 && <p className="empty-state"><span className="empty-state-title">{t('services.emptyState')}</span></p>}
 
           {services !== null && services.length > 0 && (
             <div className="admin-table-wrapper">
-              <table className="admin-table">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th scope="col">{t('common.fields.name')}</th>
@@ -299,13 +299,12 @@ function Services() {
                         {t('services.price', { price: toMoneyInput(service.price, i18n.language) })}
                       </td>
                       <td data-label={t('common.fields.status')}>
-                        <span className="admin-status" data-active={service.is_active}>
-                          <span className="admin-status-dot" aria-hidden="true" />
+                        <span className={`badge ${service.is_active ? 'badge--success' : 'badge--muted'}`}>
                           {service.is_active ? t('common.fields.statusActive') : t('common.fields.statusInactive')}
                         </span>
                       </td>
-                      <td data-label={t('common.actions.actionsColumn')}>
-                        <button type="button" className="admin-button admin-button--secondary" onClick={() => startEdit(service)}>
+                      <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
+                        <button type="button" className="secondary-button" onClick={() => startEdit(service)}>
                           {t('common.actions.edit')}
                         </button>
                       </td>
