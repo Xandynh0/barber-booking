@@ -564,6 +564,180 @@ As referências são pranchas de apresentação: as molduras de celular, os tít
 7. Abra o link de cancelamento do e-mail: confira o resumo com ícones e os dois botões. Confirme: deve aparecer "Reserva cancelada" com "Agendar novamente".
 8. Repita em largura de celular (cerca de 375 px) e só com o teclado (Tab, Enter, Espaço): o foco deve ir para o título de cada etapa.
 
+## Agenda administrativa
+
+Tela `/admin/agenda` e endpoints em `/api/v1/admin`, todos atrás de `auth:sanctum`. A tela fica dentro do `AdminShell`, a barra lateral escura de `docs/design/1.png`; as outras telas do admin usam o mesmo shell por meio do `AdminLayout`.
+
+### Endpoints
+
+| Rota | O que faz |
+|------|-----------|
+| `GET /agenda?date=AAAA-MM-DD[&professional_id=N][&status[]=...]` | Um dia local da barbearia: profissionais com períodos de trabalho e intervalos, reservas e bloqueios que cruzam o dia (com o trecho visível recortado ao dia), faixa de horas a desenhar e `allowed_actions` de cada reserva. O filtro de status não muda profissionais nem horas: a grade não muda de forma. |
+| `GET /appointments?from=...&to=...[&professional_id=N][&status[]=...]` | Reservas de um intervalo de datas locais (até 31 dias, inclusivo), em ordem cronológica, com o nome do profissional. |
+| `GET /appointments/{public_id}` | Detalhes: contatos, preço do snapshot, notificação, cancelamento e ações permitidas. |
+| `POST /appointments` | Reserva pelo admin, com `mode=scheduled` (precisa de `starts_at`) ou `mode=now` ("Atender agora", recusa `starts_at`). Usa o cabeçalho `Idempotency-Key`. |
+| `POST /appointments/{public_id}/cancel`, `/complete`, `/no-show` | Mudança de status. |
+| `POST /appointments/{public_id}/resend-confirmation` | Reenvio da confirmação, com limite próprio de 10/min. |
+
+A listagem (dia e intervalo) nunca devolve e-mail, telefone nem preço. Esses dados só aparecem nos detalhes.
+
+### Regras (conferidas no código e nos testes)
+
+- **Lock primeiro.** Criação e mudança de status abrem a transação com `SELECT ... FOR UPDATE` em `business_settings`. Depois travam o profissional e, nas mudanças de status, a reserva. Toda leitura que depende da agenda (idempotência, revalidação pelo motor) vem depois. `LockingReadOrderTest` mostra o motivo com duas conexões MySQL reais: no REPEATABLE READ, uma leitura simples antes do lock congela uma visão antiga, e depois de obter o lock a transação ainda não vê a reserva que a outra conexão gravou.
+- **Mesmo motor, contexto admin.** `AvailabilityContext::Admin` ignora a antecedência mínima. Continuam valendo expediente, bloqueios, duração, conflitos, grade de 15 minutos, passado e horizonte. A recusa traz o motivo: `busy`, `blocked`, `outside_working_hours`, `off_grid`, `past` ou `outside_horizon`.
+- **Horizonte mantido no admin.** O planejamento, seção 1, diz: "Limite de horizonte permanece para reservas futuras do admin". O código segue o planejamento.
+- **"Atender agora".** O início é o instante do servidor, truncado ao minuto, calculado dentro da transação depois dos locks. Nunca vem do navegador e nunca é arredondado para a grade. O serviço inteiro precisa caber num período de trabalho, sem bloqueio nem reserva no caminho. Se não couber, a reserva é recusada com o motivo, nunca movida para outro horário. Este modo não cria notificação.
+- **Cliente de balcão.** O nome é obrigatório; e-mail e telefone são opcionais. Sem e-mail, não há notificação nem ação de reenvio. O admin não tem teto por contato.
+- **Status.**
+  - `confirmed → cancelled`: a qualquer momento, com `cancelled_by=admin` e `cancelled_at`.
+  - `confirmed → no_show`: só depois do início.
+  - `confirmed → completed`: só depois do fim.
+  - Estados finais não mudam mais (`409 final_state`), e repetir o mesmo status é idempotente (`changed: false`).
+  - Nada é apagado, e o horário cancelado volta a ficar livre.
+- **Reenvio.** Só para reserva confirmada, futura e com e-mail.
+  - Reaproveita a notificação lógica e o `ConfirmationNotifier`, sem lock nem transação durante o SMTP.
+  - O link de cancelamento é assinado de novo a cada envio e não é guardado em lugar nenhum. Como expira no início da reserva, sai idêntico para a mesma reserva, e os links anteriores continuam valendo, como pede o planejamento.
+  - Respeita o teto de 5 tentativas (`attempts_exhausted`).
+  - A entrega não é garantida: o retorno informa só o resultado daquela tentativa.
+
+### Frontend
+
+- **Desktop (≥ 960 px).** Grade com coluna de horários e uma coluna por profissional, com intervalos, bloqueios (hachurados, com o motivo) e a linha "agora" no dia atual.
+  - Escala de 2,2 px por minuto: um cartão de 30 minutos mostra horário e status, cliente e serviço. Cartões mais curtos mostram menos, e o texto completo fica no nome acessível e no `title`.
+  - Duas reservas no mesmo horário (uma cancelada e a nova) ficam lado a lado. Numa faixa estreita, o status desce para baixo do horário.
+- **Celular.** Lista cronológica própria (sem espremer a grade), com profissional e serviço em cada cartão, e um único botão fixo "Novo agendamento" embaixo. No topo, idioma, avatar e Sair ficam numa linha só.
+- **Filtros na URL:** `data`, `profissional`, `servico` e `status`. Trocar status ou serviço filtra sem nova requisição.
+- **Estados:**
+  - carregando, atualizando, vazio, sem expediente e sem resultado para o filtro;
+  - erro com "Tentar novamente";
+  - sessão expirada, com link para o login;
+  - sucesso;
+  - conflito: horário tomado, os horários são recarregados e o que foi digitado é mantido;
+  - resultado incerto: repete com a mesma chave de idempotência.
+- **Status em texto,** nunca só pela cor. A reserva cancelada também tem o nome riscado e a borda tracejada.
+- **Ações destrutivas.** "Cancelar reserva" e "Confirmar cancelamento" usam o botão de perigo (vermelho, com ícone de proibido) e pedem confirmação, com o foco indo para "Manter reserva". "Atender agora" é um botão secundário bordô com ícone de raio.
+- **Idiomas.** Português e inglês, sem quebrar o layout em 320, 390 e 1366 px (medido abaixo).
+
+### Revisão com a skill ui-ux-pro-max (2.15.0)
+
+Usada a partir do diretório do plugin, sem cópia para o repositório.
+
+**Consultas:**
+- `--design-system` com densidade 8;
+- buscas de UX sobre formulário, modal, foco, toque, responsividade, status, estados e ações destrutivas;
+- stack `react`;
+- calendário: a busca voltou vazia e foi repetida uma vez como "date picker time slot".
+
+**Aplicado:**
+- Foco visível em tudo, inclusive no modal, e ordem de Tab igual à ordem visual.
+- Foco preso no modal e devolvido a quem o abriu.
+- Status em texto, além da cor.
+- Confirmação antes de cancelar e mensagem de sucesso.
+- Erro embaixo do campo, com `aria-describedby` e `role="alert"`.
+- Foco no primeiro campo inválido depois de um envio recusado.
+- Alvos de 44 px no celular e nenhuma rolagem horizontal; lista em vez de tabela no celular.
+- Datas no formato do idioma.
+- `prefers-reduced-motion`.
+- Botões semânticos, nunca `div` clicável.
+- `aria-live` nas atualizações.
+
+**Rejeitado:**
+- Paleta azul e verde ("Calendar blue + available green") e estilo "Soft UI Evolution": contrariam a identidade old barber aprovada.
+- Padrão "Funnel (3-Step Conversion)": é para landing page, não para ferramenta interna.
+- Fontes Abril Fatface e Merriweather via Google Fonts: a CSP e a identidade já definem as fontes locais.
+- Ações em lote: fora do MVP.
+- Rolagem horizontal da tabela no celular: preferida a lista própria.
+- `scroll-behavior: smooth`: movimento sem ganho.
+- Checagem de modo escuro: o app não tem modo escuro.
+
+### Bugs encontrados nesta entrega
+
+1. **Escape e Tab paravam de funcionar no modal.** Ao clicar em "Manter reserva", o botão com foco era desmontado e o foco caía no `<body>`, mas o `Modal` escutava as teclas só dentro do diálogo. Correção: escutar no `document` e, num Tab com o foco fora, levá-lo de volta para dentro. "Manter reserva" agora devolve o foco a "Cancelar reserva". Encontrado pela captura automatizada no Edge; coberto por dois testes.
+2. **Ícone do campo de data sobre o texto.** O `padding-left` perdia para a regra genérica declarada depois, com a mesma especificidade. Correção: seletor mais específico depois dela.
+3. **Cartões de 30 minutos cortavam o nome e escondiam o serviço,** e as linhas encolhiam umas sobre as outras. Correção: escala de 2,2 px/min, uma linha por informação com reticências e `flex-shrink: 0`.
+4. **"Atender agora" usava a mesma classe de perigo que "Cancelar reserva".** Agora é um botão secundário bordô, e as ações destrutivas ganharam ícone.
+5. **"Origem: Balcão" aparecia em toda reserva feita pelo admin,** mesmo com e-mail. Agora o texto é "Pela barbearia" / "By the shop".
+6. **"Novo agendamento" aparecia duas vezes no celular** (cabeçalho e botão fixo), e o topo ocupava três linhas. Agora só o botão fixo, e o topo usa uma linha.
+7. **A inicial do avatar era o primeiro caractere do nome,** mesmo quando era um símbolo. Agora é a primeira letra ou dígito.
+
+### Testes
+
+**Backend:**
+- `AdminAgendaTest`: dia, fuso, recorte à meia-noite, filtro por profissional e por status, intervalo de datas e validação.
+- `AdminAppointmentCreationTest`:
+  - criação sem e-mail e sem notificação;
+  - antecedência ignorada e horizonte mantido;
+  - recusas por ocupado, bloqueado, fora do expediente, fora da grade e passado;
+  - idempotência;
+  - "Atender agora" com segundos `:00`.
+- `AdminAppointmentStatusTest`:
+  - sessão exigida nas 8 rotas;
+  - cancelamento que libera o horário;
+  - transições válidas e inválidas;
+  - reenvio com e sem e-mail, com link assinado que abre;
+  - limite de tentativas;
+  - mensagens nos dois idiomas.
+- `AdminAppointmentConcurrencyTest` (MySQL real):
+  - duas reservas para o mesmo profissional e horário: exatamente uma criada;
+  - dois "Atender agora" simultâneos: exatamente um;
+  - profissionais diferentes no mesmo horário: ambos aceitos;
+  - intervalos adjacentes: ambos aceitos.
+- `LockingReadOrderTest`: a ordem lock primeiro, leituras depois.
+
+**Frontend:**
+- `Agenda.test.jsx` (16 testes):
+  - dia, filtros e URL;
+  - detalhes e cancelamento confirmado;
+  - reenvio, e nenhum reenvio sem e-mail;
+  - criação com retry na mesma chave e conflito;
+  - "Atender agora" sem horário;
+  - sessão expirada e troca de idioma;
+  - foco no modal e no primeiro campo inválido;
+  - layout de celular contra desktop.
+- `agendaLayout.test.js`: a geometria.
+- `App.test.jsx`: abre a agenda pelas rotas reais e troca o idioma.
+
+### Verificação real (14/10/2026, proxy `localhost:8080`, sessão e CSRF reais)
+
+Feita com registros descartáveis marcados `[TESTE-AGENDA]`, criados pela API e removidos depois, só pelos IDs anotados:
+- 1 admin;
+- 2 serviços e 2 profissionais com expediente;
+- 1 bloqueio;
+- 9 reservas.
+
+**Resultados:**
+- **Autenticação e CSRF.** Agenda sem sessão: 401. Escrita com XSRF errado: 419.
+- **Criação e conflitos.** Seis reservas criadas (201). Conflito, bloqueio e horário atravessando o almoço: 409 `busy`, `blocked` e `outside_working_hours`.
+- **Cancelamento.** Gravou `cancelled_by=admin` e `cancelled_at`. O mesmo horário aceitou nova reserva (201).
+- **"Atender agora".** `starts_at` terminando em `:00` e `notification_status=none`.
+- **Status.** `no_show` aceito depois do início. Cancelar em seguida: 409 `final_state`. Concluir antes do fim: 409 `not_finished`.
+- **Reenvio com e-mail.** `attempt_status=sent`, tentativas 2. O Mailpit recebeu a mensagem, e o link assinado do e-mail abriu pelo proxy (200).
+- **Reenvio sem e-mail.** 409 `no_email`, e a ação não aparece em `allowed_actions`.
+- **Intervalo e filtros.** O intervalo de 2 dias listou as 9 reservas, sem contatos. O filtro por profissional e status funcionou.
+- **Visual (Edge headless, `playwright-core`).** Login pelo formulário real.
+  - Cobertura: desktop 1366, 390 e 320 px, em português e inglês. Telas: agenda cheia, filtrada e vazia, detalhes, confirmação de cancelamento, novo agendamento e erros de validação.
+  - Resultado nas 33 verificações: nenhuma rolagem horizontal, nenhum alvo de toque menor que 44 px no celular, e o foco volta ao cartão depois de fechar o modal.
+  - As capturas ficaram fora do repositório.
+
+**Estado do banco de dev depois da limpeza.** `CHECKSUM TABLE` idêntico à linha de base em todas as tabelas de domínio. Só mudaram:
+- `sessions`: sessões anônimas da verificação e uma sessão do próprio usuário;
+- `cache`: contadores de limite de requisição;
+- `cache_locks`: travas por minuto do scheduler.
+
+Além disso, os contadores `AUTO_INCREMENT` avançaram, e as mensagens de teste foram apagadas do Mailpit pelos IDs (o total voltou a 0).
+
+**Suíte backend.** Roda no banco `barber_booking_test` com `MAIL_MAILER=array` (`phpunit.xml`): não toca no banco de dev e não envia nada ao Mailpit. O Mailpit continuou em 0 depois das execuções completas.
+
+### Roteiro manual no navegador
+
+1. Cadastre o expediente de um profissional vinculado a um serviço e entre em http://localhost:8080/admin.
+2. Em "Novo agendamento", crie uma reserva **sem e-mail**. Ela deve aparecer na grade, e os detalhes não devem oferecer "Reenviar confirmação".
+3. Tente o mesmo horário de novo. Deve aparecer o aviso de conflito, com os horários recarregados e os dados mantidos.
+4. Clique em "Atender agora" num horário dentro do expediente. O início deve ser o minuto atual.
+5. Abra uma reserva, clique em "Cancelar reserva" e depois em "Manter reserva". Aperte Esc: o modal fecha e o foco volta ao cartão. Depois cancele de verdade: o horário volta a ficar livre.
+6. Crie uma reserva com e-mail e use "Reenviar confirmação". Confira em http://localhost:8025 e abra o link.
+7. Repita em largura de celular (cerca de 390 px) e em English.
+
 ## Importação de dados de teste fictícios
 
 Comando manual (`backend/app/Console/Commands/ImportTestData.php`) para popular o banco de desenvolvimento com um pacote fixo de 15 serviços e 12 profissionais fictícios (`dados-teste-barber-booking`, mantido fora do repositório). **Nunca roda no boot, seed padrão ou CI** — é estritamente `php artisan import:test-data`, à mão.
@@ -902,9 +1076,18 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 
 ## Limitações desta etapa
 
-- Serviços, profissionais, vínculos, expediente semanal, bloqueios, autenticação administrativa, o **motor de disponibilidade**, a **criação pública de reservas** (com proteção contra double booking na transação), o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado** estão implementados. Catálogo público, telas de agendamento, reserva e cancelamento pelo admin e reenvio manual de e-mail ainda não existem.
-- **Pendente:** reserva pelo admin (incluindo "Atender agora", que não envia confirmação com link já expirado), cancelamento e reenvio de e-mail pelo admin, telas públicas de agendamento, e alerta para confirmações que esgotaram as 5 tentativas.
-- A jornada pública de agendamento existe no React (`/` e `/agendar`), revisada visualmente em navegador real contra as referências de `docs/design/` (ver "Telas públicas de agendamento"). A operação administrativa da agenda (agenda diária, reserva e cancelamento pelo admin) ainda não existe.
+- **Implementado:**
+  - serviços, profissionais, vínculos, expediente semanal e bloqueios;
+  - autenticação administrativa;
+  - o **motor de disponibilidade**;
+  - a **criação pública de reservas**, com proteção contra double booking na transação;
+  - o **e-mail de confirmação** e o **cancelamento pelo cliente por link assinado**;
+  - as telas públicas;
+  - a **agenda administrativa**: reserva pelo admin, "Atender agora", status, cancelamento e reenvio (ver "Agenda administrativa").
+- **Pendente:**
+  - alerta para confirmações que esgotaram as 5 tentativas (o reenvio pela agenda para no teto);
+  - tela de configurações da barbearia;
+  - preparação para publicação.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
 - CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
