@@ -1,5 +1,5 @@
-// Line icons for the public pages, drawn after the approved reference
-// (docs/design/old-barber.png). Inline SVG, no icon dependency. They are
+// Line icons of the Barber Booking identity, drawn after the references
+// (docs/design/old-barber.png and 1.png). Inline SVG, no icon dependency. They are
 // decorative: the text next to each one always carries the meaning, so they
 // are hidden from assistive technology.
 
@@ -146,5 +146,74 @@ export function BarberPoleIcon({ size = 40, className = '' }) {
       <rect x="4" y="33" width="12" height="2.5" rx="1" fill="#b08d57" />
       <rect x="6" y="35.5" width="8" height="3.5" rx="1.7" fill="#b08d57" />
     </svg>
+  )
+}
+
+export function CloseIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M6 6l12 12M18 6 6 18" />
+    </Icon>
+  )
+}
+
+export function PlusIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Icon>
+  )
+}
+
+export function UsersIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="9" cy="8.5" r="3.5" />
+      <path d="M2.5 20c.9-3.3 3.4-5 6.5-5s5.6 1.7 6.5 5" />
+      <path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M18 15.4c1.8.7 3 2.2 3.5 4.6" />
+    </Icon>
+  )
+}
+
+export function BanIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  )
+}
+
+export function CoffeeIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M4.5 9h11v5a5 5 0 0 1-5 5h-1a5 5 0 0 1-5-5V9Z" />
+      <path d="M15.5 10.5h1.5a2.5 2.5 0 0 1 0 5h-1.8M8 3.5v2.5M11.5 3.5v2.5" />
+    </Icon>
+  )
+}
+
+export function MenuIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Icon>
+  )
+}
+
+export function AlertIcon(props) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5v5.5M12 16.2v.1" />
+    </Icon>
+  )
+}
+
+export function BoltIcon(props) {
+  return (
+    <Icon {...props}>
+      <path d="M13 3 5.5 13.5H12L11 21l7.5-10.5H12L13 3Z" />
+    </Icon>
   )
 }

@@ -1,49 +1,31 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { useAuth } from '../context/AuthContext'
-import { AdminNav } from './AdminNav'
-import { LanguageSwitcher } from './LanguageSwitcher'
+import { AdminShell } from './AdminShell'
 import '../pages/admin/admin.css'
 
+const TITLES = {
+  '/admin/servicos': 'services',
+  '/admin/profissionais': 'professionals',
+  '/admin/expediente': 'workingHours',
+  '/admin/bloqueios': 'scheduleBlocks',
+}
+
+/**
+ * The admin screens other than the agenda: the same shell (sidebar, language,
+ * session) with the section name as the page heading, so every screen has
+ * one h1 and the navigation never changes shape between sections.
+ */
 export function AdminLayout({ children }) {
   const { t } = useTranslation()
-  const { user, logout } = useAuth()
-  const navigate = useNavigate()
-  const [signingOut, setSigningOut] = useState(false)
-
-  async function handleLogout() {
-    setSigningOut(true)
-    try {
-      await logout()
-    } finally {
-      navigate('/admin/login', { replace: true })
-    }
-  }
+  const { pathname } = useLocation()
+  const key = TITLES[pathname.replace(/\/+$/, '')]
 
   return (
-    <main className="admin-page">
-      <header className="admin-shell-header">
-        <div>
-          <h1 className="admin-brand admin-brand--inline">{t('common.brand')}</h1>
-          <p className="admin-subtitle">{t('adminLayout.signedInAs', { name: user?.name, email: user?.email })}</p>
-        </div>
-        <div className="admin-shell-header-actions">
-          <LanguageSwitcher />
-          <button
-            type="button"
-            className="admin-button admin-button--secondary"
-            onClick={handleLogout}
-            disabled={signingOut}
-          >
-            {signingOut ? t('common.actions.signingOut') : t('common.actions.signOut')}
-          </button>
-        </div>
-      </header>
-
-      <AdminNav />
-
-      {children}
-    </main>
+    <AdminShell>
+      <div className="admin-section">
+        {key && <h1 className="admin-section-title">{t(`nav.${key}`)}</h1>}
+        {children}
+      </div>
+    </AdminShell>
   )
 }
