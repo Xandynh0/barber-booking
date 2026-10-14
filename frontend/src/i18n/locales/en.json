@@ -85,7 +85,9 @@
       "network": "Could not connect to the server. Check your connection.",
       "sessionExpired": "Session expired. Please sign in again.",
       "generic": "Could not sign in. Please try again."
-    }
+    },
+    "welcome": "Sign in to see today's schedule, the services and the team's working hours.",
+    "backToSite": "Back to the website"
   },
   "agenda": {
     "title": "Schedule",

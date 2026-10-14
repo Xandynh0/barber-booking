@@ -1,100 +1,123 @@
-/* Admin layout after docs/design/1.png. Scoped to .admin-shell; tokens
-   from styles/barber-theme.css. */
+/* Admin layout: ink sidebar + light top bar from 960px; ink top bar with an
+   on-demand menu below it. Shared tokens and components come from
+   src/styles. */
 
 .admin-shell {
-  min-height: 100vh;
-  background:
-    radial-gradient(circle at 85% 0%, rgba(176, 141, 87, 0.08), transparent 40%),
-    var(--color-cream);
+  min-height: 100dvh;
+  background: var(--surface-page);
 }
 
+/* ---- Sidebar ------------------------------------------------------------ */
+
 .admin-sidebar {
-  background: var(--color-black);
-  color: var(--color-cream);
+  color: var(--text-on-dark);
+  background: var(--surface-ink);
 }
 
 .admin-sidebar-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
 }
 
 .admin-sidebar-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: var(--space-2);
+  min-width: 0;
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  color: #f3e3c3;
+  color: var(--text-on-dark);
   white-space: nowrap;
 }
 
 .admin-sidebar-brand-icon {
+  flex-shrink: 0;
   color: var(--color-brass);
 }
 
 .admin-menu-toggle {
   display: inline-grid;
   place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: var(--target);
+  height: var(--target);
   padding: 0;
-  color: var(--color-cream);
+  color: var(--text-on-dark);
   background: transparent;
-  border: 1px solid rgba(176, 141, 87, 0.6);
+  border: 1px solid var(--border-on-dark);
   border-radius: var(--radius-control);
   cursor: pointer;
+}
+
+.admin-menu-toggle[aria-expanded='true'] {
+  background: rgba(255, 250, 240, 0.08);
+  border-color: var(--color-brass);
 }
 
 .admin-sidebar-nav {
   display: none;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0 0.75rem 0.85rem;
+  gap: 2px;
+  padding: 0 var(--space-3) var(--space-3);
 }
 
 .admin-sidebar-nav--open {
   display: flex;
 }
 
+/* Section links: the active one has a brass rule on the left and a raised
+   tone; weight changes too, so it never rests on color alone. */
 .admin-sidebar-link {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  min-height: 2.9rem;
-  padding: 0.55rem 0.9rem;
-  color: #efe4cf;
+  gap: var(--space-3);
+  min-height: var(--target);
+  padding: var(--space-2) var(--space-4);
   font-family: var(--font-display);
-  font-size: 1.08rem;
+  font-size: var(--text-lg);
+  color: var(--text-on-dark-muted);
   text-decoration: none;
   border-radius: var(--radius-control);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 
 .admin-sidebar-link .public-icon {
-  color: #d9c39c;
+  flex-shrink: 0;
+  color: var(--color-brass);
 }
 
 .admin-sidebar-link:hover {
-  background: rgba(243, 234, 217, 0.08);
+  color: var(--text-on-dark);
+  background: rgba(255, 250, 240, 0.06);
 }
 
 .admin-sidebar-link--active,
 .admin-sidebar-link--active:hover {
-  background: var(--color-maroon);
+  font-weight: 700;
   color: var(--text-on-dark);
+  background: var(--color-maroon);
+}
+
+.admin-sidebar-link--active::before {
+  content: '';
+  position: absolute;
+  top: var(--space-2);
+  bottom: var(--space-2);
+  left: 0;
+  width: 3px;
+  background: var(--color-brass-light);
+  border-radius: 0 2px 2px 0;
 }
 
 .admin-sidebar-link--active .public-icon {
-  color: var(--text-on-dark);
+  color: var(--color-brass-light);
 }
 
-.admin-shell :is(.admin-sidebar a, .admin-sidebar button):focus-visible {
-  outline: 3px solid var(--color-brass);
-  outline-offset: 2px;
-}
+/* ---- Top bar and content ---------------------------------------------- */
 
 .admin-shell-main {
   min-width: 0;
@@ -102,19 +125,18 @@
 
 .admin-topbar {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.6rem 1rem;
-  padding: 0.65rem 1rem;
-  border-bottom: 1px solid var(--border-soft);
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--gutter);
   background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .admin-topbar-user {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
   font-weight: 500;
 }
@@ -123,11 +145,13 @@
   display: inline-grid;
   place-items: center;
   flex-shrink: 0;
-  width: 2.1rem;
-  height: 2.1rem;
-  border-radius: 50%;
-  background: var(--surface-muted);
+  width: 2.25rem;
+  height: 2.25rem;
+  font-family: var(--font-display);
   font-weight: 700;
+  color: var(--color-brass-light);
+  background: var(--surface-ink);
+  border-radius: 50%;
 }
 
 .admin-topbar-name {
@@ -136,29 +160,25 @@
   white-space: nowrap;
 }
 
-.admin-shell .admin-topbar-signout {
-  min-height: 2.4rem;
-  padding: 0.35rem 1rem;
-  font-size: 0.95rem;
+.admin-topbar-signout {
+  padding-inline: var(--space-4);
+  font-size: var(--text-md);
 }
 
 .admin-shell-content {
-  padding: 1rem;
+  padding: var(--space-4) var(--space-3) var(--space-7);
 }
 
-/* Phones: language, avatar and sign-out on one row, every control at
-   least 44px tall; the name is left to the avatar's title. */
+.admin-shell-content:focus {
+  outline: none;
+}
+
+/* Phones and tablets: language, avatar and sign-out on one row; the name
+   stays in the avatar's title. */
 @media (max-width: 959px) {
   .admin-topbar {
-    flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-  }
-
-  .admin-topbar .language-switcher-option {
-    min-height: 2.75rem;
-    min-width: 2.75rem;
+    padding-inline: var(--space-3);
   }
 
   .admin-topbar-name {
@@ -174,36 +194,41 @@
     margin-left: auto;
   }
 
-  .admin-shell .admin-topbar-signout {
-    min-height: 2.75rem;
-    padding-inline: 0.75rem;
+  .admin-topbar-signout {
     white-space: nowrap;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 959px) {
+  .admin-shell-content {
+    padding-inline: var(--gutter);
   }
 }
 
 @media (min-width: 960px) {
   .admin-shell {
     display: grid;
-    grid-template-columns: 15rem minmax(0, 1fr);
+    grid-template-columns: 15.5rem minmax(0, 1fr);
   }
 
   .admin-sidebar {
     position: sticky;
     top: 0;
-    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
   }
 
   .admin-sidebar-top {
     flex-direction: column;
     align-items: center;
-    padding: 1.6rem 1rem 1.25rem;
-    margin: 0 1rem 1rem;
-    border-bottom: 1px solid rgba(176, 141, 87, 0.45);
+    margin: 0 var(--space-4) var(--space-4);
+    padding: var(--space-6) 0 var(--space-5);
+    border-bottom: 1px solid var(--border-on-dark);
   }
 
   .admin-sidebar-brand {
     flex-direction: column;
-    gap: 0.35rem;
+    gap: var(--space-2);
     font-size: 1.5rem;
   }
 
@@ -216,48 +241,18 @@
   }
 
   .admin-shell-content {
-    padding: 1.5rem 1.75rem 2.5rem;
+    padding: var(--space-6) var(--gutter) var(--space-7);
   }
 }
 
-/* ---- Sections other than the agenda (AdminLayout) -------------------------
-   The pages keep their own admin.css building blocks; inside the shell they
-   take the shared surfaces, so every section reads as the same product. */
+/* ---- Sections other than the agenda (AdminLayout) ---------------------- */
+
+.admin-section {
+  max-width: 60rem;
+  margin: 0 auto;
+}
 
 .admin-section-title {
-  max-width: 720px;
-  margin: 0 auto 1.25rem;
-  font-size: clamp(1.9rem, 5vw, 2.5rem);
-  line-height: 1.1;
-}
-
-.admin-shell .admin-card {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-soft);
-  padding: 1.25rem;
-}
-
-.admin-shell .admin-card h2 {
-  font-family: var(--font-display);
-}
-
-.admin-shell .admin-button {
-  min-height: 2.75rem;
-  border-radius: var(--radius-control);
-  font-family: var(--font-display);
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.admin-shell .admin-card > .admin-hint {
-  margin-bottom: 1rem;
-  font-size: 0.95rem;
-}
-
-.admin-shell .admin-field .admin-hint {
-  font-size: 0.85rem;
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-3xl);
 }

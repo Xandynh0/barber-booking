@@ -85,7 +85,9 @@
       "network": "Não foi possível conectar ao servidor. Verifique sua conexão.",
       "sessionExpired": "Sessão expirada. Entre novamente.",
       "generic": "Não foi possível entrar. Tente novamente."
-    }
+    },
+    "welcome": "Entre para ver a agenda do dia, os serviços e o expediente da equipe.",
+    "backToSite": "Voltar ao site"
   },
   "agenda": {
     "title": "Agenda",

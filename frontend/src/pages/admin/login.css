@@ -1,0 +1,147 @@
+/* Administrator sign-in: an ink signboard on the left from 960px, the form
+   on paper on the right. Below 960px the board shrinks to a band above
+   the form. Everything stays in the flow: no absolute controls that could
+   push the page sideways. */
+
+.login-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+  background: var(--surface-page);
+}
+
+.login-board {
+  color: var(--text-on-dark);
+  background: var(--surface-ink);
+}
+
+.login-board-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--gutter);
+}
+
+.login-board-mark {
+  flex-shrink: 0;
+  color: var(--color-brass);
+}
+
+.login-board-brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 700;
+}
+
+.login-board-tagline,
+.login-board-pole {
+  display: none;
+}
+
+.login-main {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 30rem;
+  margin: 0 auto;
+  padding: var(--space-4) var(--gutter) var(--space-7);
+}
+
+.login-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.login-topline .quiet-button {
+  padding-inline: 0;
+}
+
+.login-form {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.login-form .eyebrow {
+  margin: 0;
+}
+
+.login-title {
+  margin: 0;
+  font-size: var(--text-3xl);
+}
+
+.login-lead {
+  margin: 0 0 var(--space-2);
+  color: var(--text-muted);
+}
+
+.login-form .notice {
+  margin: 0;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: var(--space-2);
+}
+
+@media (min-width: 960px) {
+  .login-page {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: 1fr;
+  }
+
+  .login-board {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .login-board-inner {
+    position: relative;
+    flex: 1;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: var(--space-4);
+    margin: var(--space-5);
+    padding: var(--space-7) var(--space-6);
+    border: 1px solid var(--border-on-dark);
+    border-radius: var(--radius-sm);
+  }
+
+  .login-board-brand {
+    font-size: clamp(2.5rem, 4vw, 3.5rem);
+    line-height: 1;
+  }
+
+  .login-board-tagline {
+    display: block;
+    max-width: 22ch;
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
+    font-style: italic;
+    color: var(--text-on-dark-muted);
+  }
+
+  .login-board-pole {
+    display: block;
+    position: absolute;
+    right: var(--space-6);
+    bottom: var(--space-6);
+  }
+
+  .login-main {
+    justify-content: center;
+    padding-top: var(--space-6);
+  }
+
+  .login-topline {
+    margin-bottom: var(--space-7);
+  }
+}

@@ -1,10 +1,11 @@
 import { useId, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ApiError } from '../../api/client'
 import { LanguageSwitcher } from '../../components/LanguageSwitcher'
+import { BarberPoleIcon, ScissorsIcon } from '../../components/PublicIcons'
 import { useAuth } from '../../context/AuthContext'
-import './admin.css'
+import './login.css'
 
 function errorMessageFor(t, error) {
   if (error.code === 'INVALID_CREDENTIALS') {
@@ -44,7 +45,9 @@ function Login() {
   if (status === 'checking') {
     return (
       <main className="admin-checking">
-        <p>{t('common.checkingSession')}</p>
+        <p role="status" className="loading-state">
+          {t('common.checkingSession')}
+        </p>
       </main>
     )
   }
@@ -80,66 +83,82 @@ function Login() {
   }
 
   return (
-    <main className="admin-page admin-page--centered">
-      <div className="page-top-bar">
-        <LanguageSwitcher />
-      </div>
+    <div className="login-page">
+      <aside className="login-board on-ink" aria-hidden="true">
+        <div className="pole-stripe" />
+        <div className="login-board-inner">
+          <ScissorsIcon size={34} className="login-board-mark" />
+          <p className="login-board-brand">{t('common.brand')}</p>
+          <p className="login-board-tagline">{t('home.tagline')}</p>
+          <BarberPoleIcon size={72} className="login-board-pole" />
+        </div>
+      </aside>
 
-      <form className="admin-card admin-login-card" onSubmit={handleSubmit} noValidate>
-        <h1 className="admin-brand">{t('common.brand')}</h1>
-        <p className="admin-subtitle">{t('auth.subtitle')}</p>
-
-        {effectiveFormError && (
-          <p className="admin-form-error" role="alert">
-            {effectiveFormError}
-          </p>
-        )}
-
-        <div className="admin-field">
-          <label htmlFor={emailId}>{t('auth.emailLabel')}</label>
-          <input
-            id={emailId}
-            name="email"
-            type="email"
-            autoComplete="username"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            aria-invalid={Boolean(fieldErrors.email)}
-            aria-describedby={fieldErrors.email ? `${emailId}-error` : undefined}
-            required
-          />
-          {fieldErrors.email && (
-            <span id={`${emailId}-error`} className="admin-field-error">
-              {fieldErrors.email[0]}
-            </span>
-          )}
+      <main className="login-main">
+        <div className="login-topline">
+          <Link className="quiet-button" to="/">
+            {t('auth.backToSite')}
+          </Link>
+          <LanguageSwitcher />
         </div>
 
-        <div className="admin-field">
-          <label htmlFor={passwordId}>{t('auth.passwordLabel')}</label>
-          <input
-            id={passwordId}
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            aria-invalid={Boolean(fieldErrors.password)}
-            aria-describedby={fieldErrors.password ? `${passwordId}-error` : undefined}
-            required
-          />
-          {fieldErrors.password && (
-            <span id={`${passwordId}-error`} className="admin-field-error">
-              {fieldErrors.password[0]}
-            </span>
-          )}
-        </div>
+        <form className="login-form" onSubmit={handleSubmit} noValidate>
+          <p className="eyebrow">{t('auth.subtitle')}</p>
+          <h1 className="login-title">{t('common.brand')}</h1>
+          <p className="login-lead">{t('auth.welcome')}</p>
 
-        <button type="submit" className="admin-button" disabled={submitting}>
-          {submitting ? t('auth.submitting') : t('auth.submit')}
-        </button>
-      </form>
-    </main>
+          {effectiveFormError && (
+            <p className="notice notice--error" role="alert">
+              {effectiveFormError}
+            </p>
+          )}
+
+          <div className="field">
+            <label htmlFor={emailId}>{t('auth.emailLabel')}</label>
+            <input
+              id={emailId}
+              name="email"
+              type="email"
+              autoComplete="username"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? `${emailId}-error` : undefined}
+              required
+            />
+            {fieldErrors.email && (
+              <span id={`${emailId}-error`} className="field-error">
+                {fieldErrors.email[0]}
+              </span>
+            )}
+          </div>
+
+          <div className="field">
+            <label htmlFor={passwordId}>{t('auth.passwordLabel')}</label>
+            <input
+              id={passwordId}
+              name="password"
+              type="password"
+              autoComplete="current-password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? `${passwordId}-error` : undefined}
+              required
+            />
+            {fieldErrors.password && (
+              <span id={`${passwordId}-error`} className="field-error">
+                {fieldErrors.password[0]}
+              </span>
+            )}
+          </div>
+
+          <button type="submit" className="primary-button login-submit" disabled={submitting}>
+            {submitting ? t('auth.submitting') : t('auth.submit')}
+          </button>
+        </form>
+      </main>
+    </div>
   )
 }
 

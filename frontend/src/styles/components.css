@@ -473,6 +473,14 @@
   transform: rotate(45deg);
 }
 
+/* Session check, before any admin page renders. */
+.admin-checking {
+  display: grid;
+  place-items: center;
+  min-height: 100dvh;
+  padding: var(--space-4);
+}
+
 /* ---- Icon bubble ---------------------------------------------------------- */
 
 .icon-bubble {
