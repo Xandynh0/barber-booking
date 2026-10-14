@@ -5,7 +5,7 @@ import App from './App'
 import { ApiError } from './api/client'
 
 // This exercises the real App tree (real BrowserRouter, real nested
-// AdminArea <Routes>, real AdminLayout/AdminNav), unlike the per-page tests
+// AdminArea <Routes>, real AdminShell/AdminLayout), unlike the per-page tests
 // which render each page in isolation with its own MemoryRouter. A route
 // that silently fails to match (e.g. because the route list a page expects
 // to exist diverges from what's actually registered in App.jsx) renders
@@ -17,12 +17,29 @@ vi.mock('./api/professionals')
 vi.mock('./api/workingHours')
 vi.mock('./api/scheduleBlocks')
 vi.mock('./api/businessSettings')
+vi.mock('./api/agenda')
 import { me } from './api/auth'
 import { listServices } from './api/services'
 import { listProfessionals } from './api/professionals'
 import { getWorkingHours } from './api/workingHours'
 import { listScheduleBlocks } from './api/scheduleBlocks'
 import { getBusinessSettings } from './api/businessSettings'
+import { getAgenda } from './api/agenda'
+
+function emptyAgenda(date) {
+  return {
+    data: {
+      date,
+      timezone: 'America/Sao_Paulo',
+      now: `${date}T12:00:00+00:00`,
+      day: { starts_at: `${date}T03:00:00+00:00`, ends_at: `${date}T03:00:00+00:00` },
+      hours: null,
+      professionals: [{ id: 1, name: 'Lucas', is_active: true, working_periods: [], breaks: [] }],
+      appointments: [],
+      blocks: [],
+    },
+  }
+}
 
 function renderAppAt(path) {
   window.history.pushState({}, '', path)
@@ -39,19 +56,21 @@ describe('App routing (admin area)', () => {
     })
     listScheduleBlocks.mockResolvedValue({ data: [] })
     getBusinessSettings.mockResolvedValue({ data: { timezone: 'America/Sao_Paulo' } })
+    getAgenda.mockImplementation(({ date }) => Promise.resolve(emptyAgenda(date)))
   })
 
   afterEach(() => {
     vi.resetAllMocks()
   })
 
-  it('renders the admin navigation and the agenda placeholder at /admin/agenda', async () => {
+  it('renders the admin navigation and the agenda day at /admin/agenda', async () => {
     renderAppAt('/admin/agenda')
 
     expect(await screen.findByRole('navigation', { name: 'Navegação administrativa' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Serviços' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Profissionais' })).toBeInTheDocument()
-    expect(screen.getByText('A agenda será implementada em uma próxima etapa.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Agenda' })).toBeInTheDocument()
+    expect(await screen.findByText('Nenhum expediente, reserva ou bloqueio neste dia.')).toBeInTheDocument()
   })
 
   it('renders the admin navigation and the services form at /admin/servicos', async () => {
@@ -100,6 +119,8 @@ describe('Language switching (App/router real)', () => {
     me.mockResolvedValue({ data: { id: 1, name: 'Admin', email: 'admin@barberbooking.test' } })
     listServices.mockResolvedValue({ data: [] })
     listProfessionals.mockResolvedValue({ data: [] })
+    getBusinessSettings.mockResolvedValue({ data: { timezone: 'America/Sao_Paulo' } })
+    getAgenda.mockImplementation(({ date }) => Promise.resolve(emptyAgenda(date)))
   })
 
   afterEach(() => {
@@ -144,7 +165,8 @@ describe('Language switching (App/router real)', () => {
     expect(screen.getByRole('link', { name: 'Professionals' })).toBeInTheDocument()
     // Still on the agenda screen, still authenticated — switching language
     // never redirects to login or re-triggers the session check.
-    expect(screen.getByText('The schedule will be implemented in a future stage.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Schedule' })).toBeInTheDocument()
+    expect(await screen.findByText('No working hours, bookings or blocks on this day.')).toBeInTheDocument()
     expect(me).toHaveBeenCalledTimes(1)
   })
 })

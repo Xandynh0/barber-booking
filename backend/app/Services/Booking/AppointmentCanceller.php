@@ -49,7 +49,7 @@ class AppointmentCanceller
             $appointment->update([
                 'status' => Appointment::STATUS_CANCELLED,
                 'cancelled_at' => CarbonImmutable::now('UTC'),
-                'cancelled_by' => 'customer',
+                'cancelled_by' => Appointment::CANCELLED_BY_CUSTOMER,
             ]);
 
             return self::CANCELLED;

@@ -1,0 +1,925 @@
+/* Admin agenda after docs/design/1.png. Scoped to the agenda classes;
+   tokens from styles/barber-theme.css (the page lives inside
+   .admin-shell.barber-theme, the dialogs inside .modal-root.barber-theme).
+
+   Grid geometry: the API sends instants, utils/agendaLayout.js turns them
+   into minutes from the start of the drawn range (`--top`, `--height`,
+   `--total`) and side-by-side lanes (`--lane`, `--lanes`); this file only
+   scales minutes to pixels. */
+
+.agenda-page {
+  /* 30 minutes = 66px: time, customer and service fit a 30-minute card. */
+  --minute: 2.2px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.agenda-muted {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ---- Header -------------------------------------------------------------- */
+
+.agenda-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.agenda-title {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 2.75rem);
+  line-height: 1.05;
+}
+
+.agenda-date {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+}
+
+.agenda-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.agenda-day-nav,
+.agenda-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.barber-theme .icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 2.9rem;
+  height: 2.9rem;
+  padding: 0;
+  color: var(--color-black);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.barber-theme .icon-button:hover:not(:disabled) {
+  border-color: var(--color-maroon);
+  color: var(--color-maroon-dark);
+}
+
+.barber-theme .icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.agenda-page .agenda-today {
+  padding-inline: 1.1rem;
+}
+
+.agenda-page .agenda-now-button {
+  color: var(--color-maroon);
+  border-color: var(--color-maroon);
+}
+
+.agenda-page .agenda-now-button:hover:not(:disabled) {
+  background: var(--color-maroon);
+  color: var(--text-on-dark);
+}
+
+/* ---- Filters -------------------------------------------------------------- */
+
+.agenda-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.75rem 1rem;
+  padding: 0.9rem 1rem;
+}
+
+.agenda-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.agenda-filter label,
+.agenda-field label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.agenda-filter-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.agenda-filter-control .public-icon {
+  position: absolute;
+  left: 0.7rem;
+  pointer-events: none;
+  color: var(--text-muted);
+}
+
+.agenda-filter :is(input, select),
+.agenda-field :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  color: var(--color-black);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+}
+
+/* After the generic padding above, which would otherwise win and put the
+   date under the calendar icon. */
+.agenda-filter .agenda-filter-control input {
+  padding-left: 2.3rem;
+}
+
+/* Phone: professional, service and status fold under the date. */
+.agenda-more-filters {
+  grid-column: 1 / -1;
+}
+
+.agenda-more-filters > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+
+.agenda-more-filters > summary::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-25%) rotate(45deg);
+}
+
+.agenda-more-filters[open] > summary::after {
+  transform: translateY(25%) rotate(-135deg);
+}
+
+.agenda-more-filters > summary:focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.agenda-more-filters-body {
+  display: grid;
+  padding-top: 0.5rem;
+}
+
+.agenda-field :is(input, select)[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.agenda-field :is(input, select):disabled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+}
+
+/* ---- Notices ---------------------------------------------------------------- */
+
+.agenda-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
+.agenda-notice p {
+  margin: 0;
+}
+
+.agenda-notice--error {
+  background: var(--surface-danger);
+  border-color: #e4b9b2;
+  color: #6b0f1d;
+}
+
+.agenda-notice--success {
+  background: var(--surface-success);
+  border-color: #b7d3ad;
+  color: #1f4a27;
+}
+
+.agenda-notice--info {
+  display: block;
+  background: var(--surface-muted);
+}
+
+.agenda-notice--info p + p {
+  margin-top: 0.35rem;
+}
+
+.agenda-flash {
+  flex-wrap: nowrap;
+}
+
+.agenda-flash .icon-button {
+  flex-shrink: 0;
+  width: 2.4rem;
+  height: 2.4rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.agenda-loading,
+.agenda-updating {
+  font-style: italic;
+}
+
+.agenda-updating {
+  margin-bottom: 0.5rem;
+}
+
+/* ---- Empty states ------------------------------------------------------------- */
+
+.agenda-empty {
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.agenda-empty p {
+  margin: 0;
+}
+
+.agenda-empty--inline {
+  margin-bottom: 0.75rem;
+  padding: 1rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.agenda-empty-title {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+/* ---- Status ----------------------------------------------------------------------- */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.status-badge--confirmed {
+  background: var(--surface-success);
+  color: #1f4a27;
+}
+
+.status-badge--completed {
+  background: #dde6ef;
+  color: #1d3a57;
+}
+
+.status-badge--no_show {
+  background: #f6e7c8;
+  color: #5c3d06;
+}
+
+.status-badge--cancelled {
+  background: var(--surface-muted);
+  color: var(--text-muted);
+  border-color: var(--border-strong);
+}
+
+/* ---- Reservation card (grid and list) ----------------------------------------------- */
+
+.agenda-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.75rem 0.55rem 0.9rem;
+  font: inherit;
+  text-align: left;
+  color: var(--color-black);
+  background: #f6ead6;
+  border: 1px solid var(--border-soft);
+  border-left: 5px solid var(--color-maroon);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.agenda-card:hover {
+  border-color: var(--border-strong);
+  border-left-color: var(--color-maroon-dark);
+}
+
+.agenda-card--completed {
+  background: #eef2f6;
+  border-left-color: #1d3a57;
+}
+
+.agenda-card--no_show {
+  background: #faf1de;
+  border-left-color: #a97a1d;
+}
+
+.agenda-card--cancelled {
+  background: var(--surface);
+  border-left-color: var(--border-strong);
+  border-style: dashed;
+  border-left-style: solid;
+  box-shadow: none;
+  color: var(--text-muted);
+}
+
+.agenda-card--cancelled .agenda-card-customer {
+  text-decoration: line-through;
+}
+
+.agenda-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.agenda-card-time {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agenda-card-customer {
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.agenda-card-service {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.agenda-card-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+/* ---- Mobile list ------------------------------------------------------------------------ */
+
+.agenda-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.agenda-card--row {
+  height: auto;
+}
+
+.agenda-list-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-control);
+  background: repeating-linear-gradient(135deg, var(--surface-muted) 0 8px, var(--surface) 8px 16px);
+  overflow-wrap: anywhere;
+}
+
+.agenda-list-block > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.agenda-list-block .public-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.agenda-block--shop.agenda-list-block {
+  border-color: var(--color-maroon);
+}
+
+/* ---- Desktop grid --------------------------------------------------------------------------- */
+
+.agenda-grid-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+}
+
+.agenda-grid {
+  min-width: max-content;
+}
+
+.agenda-grid-head,
+.agenda-grid-body {
+  display: grid;
+  min-width: 100%;
+}
+
+.agenda-grid-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.agenda-grid-corner,
+.agenda-grid-professional {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 3.6rem;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.agenda-grid-corner {
+  font-family: var(--font-display);
+  font-weight: 700;
+  border-right: 1px solid var(--border-soft);
+}
+
+.agenda-grid-professional {
+  border-left: 1px solid var(--border-soft);
+}
+
+.agenda-grid-professional strong {
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+}
+
+.agenda-grid-professional span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.agenda-grid-body {
+  position: relative;
+  height: calc(var(--total) * var(--minute));
+}
+
+.agenda-grid-times {
+  position: relative;
+  border-right: 1px solid var(--border-soft);
+}
+
+.agenda-grid-mark {
+  position: absolute;
+  top: calc(var(--top) * var(--minute));
+  right: 0.6rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(0.15rem);
+}
+
+.agenda-grid-mark--hour {
+  color: var(--color-black);
+  font-weight: 600;
+}
+
+.agenda-column {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-left: 1px solid var(--border-soft);
+  /* Half-hour lines across the column. */
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--border-soft) 0 1px,
+    transparent 1px calc(30 * var(--minute))
+  );
+}
+
+/* Outside working hours: hatched; inside: plain. */
+.agenda-column::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(135deg, rgba(185, 169, 140, 0.16) 0 6px, transparent 6px 12px);
+  pointer-events: none;
+}
+
+.agenda-working {
+  position: absolute;
+  top: calc(var(--top) * var(--minute));
+  left: 0;
+  right: 0;
+  height: calc(var(--height) * var(--minute));
+  background: var(--surface-raised);
+  opacity: 0.9;
+}
+
+.agenda-break,
+.agenda-block,
+.agenda-slot {
+  position: absolute;
+  top: calc(var(--top) * var(--minute));
+  height: calc(var(--height) * var(--minute));
+  padding: 2px 6px;
+  box-sizing: border-box;
+}
+
+.agenda-break {
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.25rem 0.9rem;
+}
+
+.agenda-break::before {
+  content: '';
+  position: absolute;
+  inset: 3px 6px;
+  z-index: -1;
+  border-radius: var(--radius-control);
+  background: #e7e1d6;
+}
+
+.agenda-break > span,
+.agenda-block > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.agenda-break span span,
+.agenda-block span span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.agenda-block,
+.agenda-slot {
+  left: calc(var(--lane) * 100% / var(--lanes));
+  width: calc(100% / var(--lanes));
+  z-index: 2;
+}
+
+.agenda-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem;
+  overflow: hidden;
+}
+
+.agenda-block::before {
+  content: '';
+  position: absolute;
+  inset: 2px 6px;
+  z-index: -1;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-control);
+  background: repeating-linear-gradient(135deg, var(--surface-muted) 0 8px, var(--surface) 8px 16px);
+}
+
+.agenda-block--shop::before {
+  border-color: var(--color-maroon);
+}
+
+.agenda-block .public-icon {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.agenda-block-reason {
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.agenda-block[data-size='xs'] > span > span,
+.agenda-block[data-size='s'] .agenda-block-reason {
+  display: none;
+}
+
+/* In the grid each line keeps to one line (full text in the card's
+   accessible name and title); the mobile list wraps instead. */
+.agenda-slot {
+  container-type: inline-size;
+}
+
+.agenda-slot .agenda-card {
+  padding: 0.2rem 0.6rem 0.2rem 0.75rem;
+  gap: 0;
+}
+
+/* Lines never shrink into each other; what does not fit is cut below. */
+.agenda-slot .agenda-card > * {
+  flex-shrink: 0;
+}
+
+.agenda-slot :is(.agenda-card-customer, .agenda-card-service, .agenda-card-time) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+.agenda-slot .agenda-card-customer {
+  font-size: 1.02rem;
+}
+
+.agenda-slot .agenda-card-service {
+  font-size: 0.88rem;
+  line-height: 1.3;
+}
+
+.agenda-slot .agenda-card-top {
+  align-items: center;
+  min-width: 0;
+}
+
+.agenda-slot .agenda-card-time {
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.agenda-slot .status-badge {
+  padding: 0 0.45rem;
+  font-size: 0.75rem;
+}
+
+/* A narrow lane (two reservations side by side, e.g. a cancelled one and
+   its replacement): the status goes under the time instead of covering it. */
+@container (max-width: 9.5rem) {
+  .agenda-slot .agenda-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+}
+
+/* Short reservations: only what fits. */
+.agenda-card[data-size='xs'] {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  padding-block: 0.1rem;
+}
+
+.agenda-card[data-size='xs'] :is(.agenda-card-top .status-badge, .agenda-card-service, .agenda-card-warning) {
+  display: none;
+}
+
+.agenda-card[data-size='xs'] .agenda-card-customer {
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agenda-card[data-size='s'] :is(.agenda-card-service, .agenda-card-warning) {
+  display: none;
+}
+
+.agenda-now {
+  position: absolute;
+  top: calc(var(--top) * var(--minute));
+  left: 4.5rem;
+  right: 0;
+  z-index: 4;
+  height: 0;
+  border-top: 2px solid var(--color-danger);
+  pointer-events: none;
+}
+
+.agenda-now span {
+  position: absolute;
+  top: -0.7rem;
+  left: -4.2rem;
+  padding: 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-on-dark);
+  background: var(--color-danger);
+  border-radius: 4px;
+}
+
+/* ---- Session expired ------------------------------------------------------------------------- */
+
+.agenda-session .primary-button {
+  min-height: 2.5rem;
+  padding-block: 0.4rem;
+}
+
+/* ---- Details dialog ------------------------------------------------------------------------- */
+
+.details-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.details-customer {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.details-list {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.details-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+  gap: 0.75rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.details-list dt {
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.details-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.details-reference {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.details-actions {
+  margin-top: 1rem;
+}
+
+.details-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.details-confirm {
+  padding: 1rem;
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+  background: var(--surface-danger);
+}
+
+.details-confirm-title {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.details-confirm .details-buttons {
+  margin-top: 0.85rem;
+}
+
+/* Phones: the date on its own row; under "more filters", professional
+   on its own row and service and status side by side. */
+@media (max-width: 959px) {
+  .agenda-filters {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.6rem;
+    padding: 0.75rem;
+  }
+
+  .agenda-more-filters-body {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+  }
+
+  .agenda-more-filters-body > .agenda-filter:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Both actions share the row and wrap to full width when it is narrow. */
+  .agenda-actions {
+    width: 100%;
+  }
+
+  .agenda-actions > button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 479px) {
+  .details-list > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.1rem;
+  }
+
+  .details-buttons > button {
+    flex: 1 1 100%;
+  }
+}
+
+/* ---- New appointment form --------------------------------------------------------------------- */
+
+.agenda-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.agenda-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.agenda-field p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.agenda-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 0.9rem;
+}
+
+.barber-theme .field-error {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.barber-theme .link-button {
+  padding: 0;
+  font: inherit;
+  color: var(--color-maroon);
+  text-decoration: underline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.agenda-form-actions {
+  justify-content: flex-end;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-soft);
+}
+

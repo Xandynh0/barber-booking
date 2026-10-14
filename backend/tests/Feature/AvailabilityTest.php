@@ -342,19 +342,25 @@ class AvailabilityTest extends TestCase
         }
     }
 
-    // --- Booking horizon (both contexts) --------------------------------
+    // --- Booking horizon (public only) ----------------------------------
 
-    public function test_horizon_counts_today_as_the_first_available_date_in_both_contexts(): void
+    public function test_horizon_counts_today_as_the_first_available_public_date(): void
     {
         // Today is 2026-11-02; with 30 days the last date is 2026-12-01.
         [$service, $professional] = $this->bookable(duration: 30, periods: $this->everyDay('09:00', '10:00'), horizon: 30);
 
-        foreach (['public', 'admin'] as $context) {
-            $this->assertNotEmpty($this->availability($context, $service->id, $professional->id, '2026-12-01')->json('data.slots'));
-            $this->availability($context, $service->id, $professional->id, '2026-12-02')
-                ->assertOk()
-                ->assertJsonPath('data.slots', []);
-        }
+        $this->assertNotEmpty($this->availability('public', $service->id, $professional->id, '2026-12-01')->json('data.slots'));
+        $this->availability('public', $service->id, $professional->id, '2026-12-02')
+            ->assertOk()
+            ->assertJsonPath('data.slots', []);
+    }
+
+    public function test_the_admin_ignores_the_horizon(): void
+    {
+        [$service, $professional] = $this->bookable(duration: 30, periods: $this->everyDay('09:00', '10:00'), horizon: 30);
+
+        $this->assertSame(['09:00', '09:15', '09:30'], $this->localStarts($this->adminAvailability($service, $professional, '2026-12-02')));
+        $this->assertSame(['09:00', '09:15', '09:30'], $this->localStarts($this->adminAvailability($service, $professional, '2027-06-15')));
     }
 
     public function test_horizon_uses_the_barbershop_local_date_not_utc(): void
@@ -362,10 +368,10 @@ class AvailabilityTest extends TestCase
         // 22:30 on Monday in São Paulo is already 01:30 on Tuesday in UTC.
         // With a 1-day horizon only the local "today" (Monday) is open.
         $this->travelTo(CarbonImmutable::parse('2026-11-02 22:30', self::TZ));
-        [$service, $professional] = $this->bookable(duration: 30, periods: $this->everyDay('23:00', '23:59'), horizon: 1);
+        [$service, $professional] = $this->bookable(duration: 30, periods: $this->everyDay('23:00', '23:59'), horizon: 1, minNotice: 0);
 
-        $this->assertSame(['23:00', '23:15'], $this->localStarts($this->adminAvailability($service, $professional, '2026-11-02')));
-        $this->adminAvailability($service, $professional, '2026-11-03')
+        $this->assertSame(['23:00', '23:15'], $this->localStarts($this->availability('public', $service->id, $professional->id, '2026-11-02')));
+        $this->availability('public', $service->id, $professional->id, '2026-11-03')
             ->assertOk()
             ->assertJsonPath('data.slots', []);
     }

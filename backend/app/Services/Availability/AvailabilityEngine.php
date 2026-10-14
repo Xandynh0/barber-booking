@@ -15,8 +15,9 @@ use Carbon\CarbonImmutable;
  * contexts. Rules (docs/planejamento-barbearia-mvp.md, seções 1, 5 e 16):
  *
  * - service and professional active, and linked to each other;
- * - the requested date (in the barbershop's timezone) within the booking
- *   horizon: today plus `booking_horizon_days - 1` days, in both contexts;
+ * - public: the requested date (in the barbershop's timezone) within the
+ *   booking horizon, today plus `booking_horizon_days - 1` days; admin:
+ *   no horizon;
  * - the whole service duration contained in a single working period;
  * - no intersection with schedule blocks or non-cancelled appointments,
  *   using half-open intervals `[start, end)` — a slot may start exactly
@@ -37,6 +38,20 @@ class AvailabilityEngine
 {
     public const SLOT_STEP_MINUTES = 15;
 
+    /** Why an interval cannot be booked — see refusalFor() and intervalRefusal(). */
+    public const REFUSAL_PAST = 'past';
+
+    public const REFUSAL_OUTSIDE_HORIZON = 'outside_horizon';
+
+    public const REFUSAL_OUTSIDE_WORKING_HOURS = 'outside_working_hours';
+
+    public const REFUSAL_BLOCKED = 'blocked';
+
+    public const REFUSAL_BUSY = 'busy';
+
+    /** Inside working hours and free, but not one of the 15-minute starts. */
+    public const REFUSAL_OFF_GRID = 'off_grid';
+
     /**
      * @param  string  $date  Calendar date `YYYY-MM-DD`, interpreted in the barbershop's timezone.
      * @return array<int, array{starts_at: CarbonImmutable, ends_at: CarbonImmutable}> Slots in UTC, ordered by start.
@@ -47,7 +62,8 @@ class AvailabilityEngine
         $timezone = $settings->timezone;
         $now = CarbonImmutable::now('UTC');
 
-        if (! $this->isWithinHorizon($date, $now, $timezone, (int) $settings->booking_horizon_days)) {
+        if ($context === AvailabilityContext::Public
+            && ! $this->isWithinHorizon($date, $now, $timezone, (int) $settings->booking_horizon_days)) {
             return [];
         }
 
@@ -134,6 +150,81 @@ class AvailabilityEngine
         }
 
         return false;
+    }
+
+    /**
+     * For an arbitrary interval — "Atender agora" starts at the current
+     * minute, off the 15-minute grid — the first reason it cannot be
+     * booked, or null when it can: the whole interval inside one working
+     * period of that local date, and no intersection with a schedule block
+     * or a non-cancelled appointment (`[start, end)`, so adjacent is fine).
+     * Notice, horizon and grid are deliberately not checked here.
+     *
+     * Like isSlotAvailable(), it only protects against concurrent writers
+     * when called inside the writing transaction, after the locks.
+     */
+    public function intervalRefusal(Professional $professional, CarbonImmutable $startsAt, CarbonImmutable $endsAt): ?string
+    {
+        if (! $this->fitsWorkingHours($professional, $startsAt, $endsAt)) {
+            return self::REFUSAL_OUTSIDE_WORKING_HOURS;
+        }
+
+        $blocked = ScheduleBlock::query()
+            ->where('professional_id', $professional->id)
+            ->where('starts_at', '<', $endsAt)
+            ->where('ends_at', '>', $startsAt)
+            ->exists();
+
+        if ($blocked) {
+            return self::REFUSAL_BLOCKED;
+        }
+
+        $busy = Appointment::query()
+            ->occupying()
+            ->where('professional_id', $professional->id)
+            ->where('starts_at', '<', $endsAt)
+            ->where('ends_at', '>', $startsAt)
+            ->exists();
+
+        return $busy ? self::REFUSAL_BUSY : null;
+    }
+
+    /**
+     * Explains why isSlotAvailable() said no, for a clear message to the
+     * administrator. Only meaningful after isSlotAvailable() returned false
+     * for the same arguments; it never decides availability on its own.
+     */
+    public function refusalFor(Service $service, Professional $professional, CarbonImmutable $startsAt, AvailabilityContext $context): string
+    {
+        $settings = BusinessSettings::query()->firstOrFail();
+        $now = CarbonImmutable::now('UTC');
+        $earliestStart = $context === AvailabilityContext::Public
+            ? $now->addMinutes((int) $settings->min_notice_minutes)
+            : $now;
+
+        if ($startsAt < $earliestStart) {
+            return self::REFUSAL_PAST;
+        }
+
+        $localDate = $startsAt->setTimezone($settings->timezone)->format('Y-m-d');
+        if ($context === AvailabilityContext::Public
+            && ! $this->isWithinHorizon($localDate, $now, $settings->timezone, (int) $settings->booking_horizon_days)) {
+            return self::REFUSAL_OUTSIDE_HORIZON;
+        }
+
+        return $this->intervalRefusal($professional, $startsAt, $startsAt->addMinutes((int) $service->duration_minutes))
+            ?? self::REFUSAL_OFF_GRID;
+    }
+
+    /**
+     * The professional's working periods on a local date, as UTC instants —
+     * public wrapper for the agenda, which draws them.
+     *
+     * @return array<int, array{starts_at: CarbonImmutable, ends_at: CarbonImmutable}>
+     */
+    public function workingPeriodsOn(Professional $professional, string $date): array
+    {
+        return $this->workingWindows($professional, $date, BusinessSettings::query()->firstOrFail()->timezone);
     }
 
     /**

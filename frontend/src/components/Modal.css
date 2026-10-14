@@ -1,0 +1,97 @@
+/* Dialog on the shared identity (styles/barber-theme.css). Full screen on
+   phones, centered card from 640px. */
+
+.modal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(28, 26, 23, 0.55);
+}
+
+.modal-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100vh - 2rem);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: 0 18px 48px rgba(28, 26, 23, 0.28);
+  overflow: hidden;
+}
+
+.modal-dialog:focus {
+  outline: none;
+}
+
+.modal-dialog--medium {
+  max-width: 34rem;
+}
+
+.modal-dialog--large {
+  max-width: 42rem;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.modal-close {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--color-black);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.modal-close:hover {
+  border-color: var(--border-strong);
+}
+
+.modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+@media (max-width: 639px) {
+  .modal-root {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .modal-dialog,
+  .modal-dialog--medium,
+  .modal-dialog--large {
+    max-width: none;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    border: 0;
+  }
+}

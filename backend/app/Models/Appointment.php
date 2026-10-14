@@ -12,11 +12,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
- * A reservation. Only read in this delivery (the availability engine treats
- * every non-cancelled row as busy time); creating one — idempotency,
- * contact limit and transactional revalidation under lock — belongs to the
- * public booking delivery. See docs/planejamento-barbearia-mvp.md, seções
- * 4 e 5.
+ * A reservation (docs/planejamento-barbearia-mvp.md, seções 3, 4 e 5).
+ * Created by AppointmentBooker (public or admin), its status changed only
+ * by AppointmentCanceller and AppointmentStatusChanger. Every status other
+ * than `cancelled` keeps occupying the professional's time — completed and
+ * no-show appointments preserve their interval in the history.
  */
 #[Fillable([
     'professional_id', 'service_id',
@@ -34,6 +34,19 @@ class Appointment extends Model
     public const STATUS_CONFIRMED = 'confirmed';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    /** Final; allowed once the appointment has ended (seção 3). */
+    public const STATUS_COMPLETED = 'completed';
+
+    /** Final; allowed once the appointment has started (seção 3). */
+    public const STATUS_NO_SHOW = 'no_show';
+
+    /** Every status, in the order the agenda filters list them. */
+    public const STATUSES = [self::STATUS_CONFIRMED, self::STATUS_COMPLETED, self::STATUS_NO_SHOW, self::STATUS_CANCELLED];
+
+    public const CANCELLED_BY_CUSTOMER = 'customer';
+
+    public const CANCELLED_BY_ADMIN = 'admin';
 
     public const SOURCE_PUBLIC = 'public';
 

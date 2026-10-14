@@ -1,0 +1,263 @@
+/* Admin layout after docs/design/1.png. Scoped to .admin-shell; tokens
+   from styles/barber-theme.css. */
+
+.admin-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 85% 0%, rgba(176, 141, 87, 0.08), transparent 40%),
+    var(--color-cream);
+}
+
+.admin-sidebar {
+  background: var(--color-black);
+  color: var(--color-cream);
+}
+
+.admin-sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+}
+
+.admin-sidebar-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #f3e3c3;
+  white-space: nowrap;
+}
+
+.admin-sidebar-brand-icon {
+  color: var(--color-brass);
+}
+
+.admin-menu-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  color: var(--color-cream);
+  background: transparent;
+  border: 1px solid rgba(176, 141, 87, 0.6);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.admin-sidebar-nav {
+  display: none;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0 0.75rem 0.85rem;
+}
+
+.admin-sidebar-nav--open {
+  display: flex;
+}
+
+.admin-sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 2.9rem;
+  padding: 0.55rem 0.9rem;
+  color: #efe4cf;
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  text-decoration: none;
+  border-radius: var(--radius-control);
+}
+
+.admin-sidebar-link .public-icon {
+  color: #d9c39c;
+}
+
+.admin-sidebar-link:hover {
+  background: rgba(243, 234, 217, 0.08);
+}
+
+.admin-sidebar-link--active,
+.admin-sidebar-link--active:hover {
+  background: var(--color-maroon);
+  color: var(--text-on-dark);
+}
+
+.admin-sidebar-link--active .public-icon {
+  color: var(--text-on-dark);
+}
+
+.admin-shell :is(.admin-sidebar a, .admin-sidebar button):focus-visible {
+  outline: 3px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.admin-shell-main {
+  min-width: 0;
+}
+
+.admin-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem 1rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border-soft);
+  background: var(--surface-raised);
+}
+
+.admin-topbar-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.admin-topbar-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  background: var(--surface-muted);
+  font-weight: 700;
+}
+
+.admin-topbar-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-shell .admin-topbar-signout {
+  min-height: 2.4rem;
+  padding: 0.35rem 1rem;
+  font-size: 0.95rem;
+}
+
+.admin-shell-content {
+  padding: 1rem;
+}
+
+/* Phones: language, avatar and sign-out on one row, every control at
+   least 44px tall; the name is left to the avatar's title. */
+@media (max-width: 959px) {
+  .admin-topbar {
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+  }
+
+  .admin-topbar .language-switcher-option {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
+  }
+
+  .admin-topbar-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+
+  .admin-topbar-user {
+    margin-left: auto;
+  }
+
+  .admin-shell .admin-topbar-signout {
+    min-height: 2.75rem;
+    padding-inline: 0.75rem;
+    white-space: nowrap;
+  }
+}
+
+@media (min-width: 960px) {
+  .admin-shell {
+    display: grid;
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+
+  .admin-sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+
+  .admin-sidebar-top {
+    flex-direction: column;
+    align-items: center;
+    padding: 1.6rem 1rem 1.25rem;
+    margin: 0 1rem 1rem;
+    border-bottom: 1px solid rgba(176, 141, 87, 0.45);
+  }
+
+  .admin-sidebar-brand {
+    flex-direction: column;
+    gap: 0.35rem;
+    font-size: 1.5rem;
+  }
+
+  .admin-menu-toggle {
+    display: none;
+  }
+
+  .admin-sidebar-nav {
+    display: flex;
+  }
+
+  .admin-shell-content {
+    padding: 1.5rem 1.75rem 2.5rem;
+  }
+}
+
+/* ---- Sections other than the agenda (AdminLayout) -------------------------
+   The pages keep their own admin.css building blocks; inside the shell they
+   take the shared surfaces, so every section reads as the same product. */
+
+.admin-section-title {
+  max-width: 720px;
+  margin: 0 auto 1.25rem;
+  font-size: clamp(1.9rem, 5vw, 2.5rem);
+  line-height: 1.1;
+}
+
+.admin-shell .admin-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-soft);
+  padding: 1.25rem;
+}
+
+.admin-shell .admin-card h2 {
+  font-family: var(--font-display);
+}
+
+.admin-shell .admin-button {
+  min-height: 2.75rem;
+  border-radius: var(--radius-control);
+  font-family: var(--font-display);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-shell .admin-card > .admin-hint {
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+}
+
+.admin-shell .admin-field .admin-hint {
+  font-size: 0.85rem;
+}

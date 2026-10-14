@@ -13,6 +13,6 @@ enum AvailabilityContext: string
     /** Respects min_notice_minutes and booking_horizon_days. */
     case Public = 'public';
 
-    /** Ignores min_notice_minutes; still bound by booking_horizon_days and never offered past instants. */
+    /** Ignores min_notice_minutes and booking_horizon_days; never offered past instants. */
     case Admin = 'admin';
 }
