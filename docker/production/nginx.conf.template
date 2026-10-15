@@ -1,0 +1,85 @@
+# Production nginx for Barber Booking (docker/production/web.Dockerfile).
+# ${PUBLIC_SCHEME} and ${REAL_IP_FROM} are filled in from the container
+# environment at start-up; everything written $like_this is nginx's own.
+#
+# Expected topology: a TLS-terminating reverse proxy (to be chosen with the
+# hosting) in front of this container. That proxy appends the visitor's
+# address to X-Forwarded-For; REAL_IP_FROM is the network it connects from.
+# This file is included inside nginx's http context (conf.d/default.conf).
+
+# The signed cancellation links carry `signature`/`expires` in the query
+# string: requests are logged with the path only ($uri), never the query.
+log_format no_query '$remote_addr - [$time_local] "$request_method $uri" $status $body_bytes_sent';
+
+# Visitor address as seen by the TLS proxy (last X-Forwarded-For entry, the
+# one it added); requests from anywhere else keep their own address.
+set_real_ip_from ${REAL_IP_FROM};
+real_ip_header X-Forwarded-For;
+
+map "${PUBLIC_SCHEME}" $fastcgi_https {
+    https on;
+    default "";
+}
+
+gzip on;
+gzip_comp_level 5;
+gzip_min_length 1024;
+gzip_vary on;
+gzip_types text/css application/javascript application/json image/svg+xml text/plain;
+
+server {
+    listen 80 default_server;
+    server_name _;
+    server_tokens off;
+    client_max_body_size 64k;
+    # Declared in the server block so it replaces the image's default
+    # http-level log (whose $request would include the query string).
+    access_log /var/log/nginx/access.log no_query;
+
+    root /usr/share/nginx/html;
+
+    # Laravel: API, Sanctum CSRF cookie, signed cancellation pages and /up.
+    # Everything goes to public/index.php; no other PHP file is reachable.
+    # PHP-FPM receives the visitor's address as REMOTE_ADDR directly, and the
+    # forwarded headers are blanked so a client cannot inject them.
+    location ~ ^/(api|sanctum|cancelar|up)(/|$) {
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME /var/www/html/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param DOCUMENT_ROOT /var/www/html/public;
+        fastcgi_param HTTPS $fastcgi_https if_not_empty;
+        fastcgi_param HTTP_X_FORWARDED_FOR "";
+        fastcgi_param HTTP_X_FORWARDED_HOST "";
+        fastcgi_param HTTP_X_FORWARDED_PROTO "";
+        fastcgi_param HTTP_X_FORWARDED_PORT "";
+        fastcgi_read_timeout 30s;
+        fastcgi_pass backend:9000;
+    }
+
+    # Vite output: file names carry a content hash, so they never change.
+    location /assets/ {
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    # No dotfiles (none are built, but never serve one by accident).
+    location ~ /\. {
+        return 404;
+    }
+
+    # The SPA: every other path serves index.html (client-side routes).
+    # no-cache: the browser revalidates the HTML on every visit, so a new
+    # release is picked up at once and never pinned to an old asset list.
+    location / {
+        try_files $uri /index.html;
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+        # Same origin only. 'unsafe-inline' for styles covers React's style
+        # attributes (agenda grid positions); no inline or third-party script.
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+    }
+}
