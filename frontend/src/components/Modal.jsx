@@ -13,8 +13,8 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
  * focused control disappears (a confirmation step that closes, a button
  * replaced by its result) focus falls back to <body>, and Escape and Tab
  * must still work from there.
- * Rendered in a portal under `.barber-theme`, so it uses the shared tokens
- * without depending on where it was opened from.
+ * Rendered in a portal; the design tokens are global, so it looks the
+ * same wherever it was opened from.
  */
 export function Modal({ title, onClose, closeLabel, children, size = 'medium', initialFocusRef }) {
   const titleId = useId()
@@ -69,7 +69,7 @@ export function Modal({ title, onClose, closeLabel, children, size = 'medium', i
   }, [])
 
   return createPortal(
-    <div className="barber-theme modal-root">
+    <div className="modal-root">
       <div className="modal-backdrop" onClick={() => onCloseRef.current()} aria-hidden="true" />
       <div
         ref={dialogRef}

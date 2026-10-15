@@ -1,6 +1,6 @@
-/* Admin agenda after docs/design/1.png. Scoped to the agenda classes;
-   tokens from styles/barber-theme.css (the page lives inside
-   .admin-shell.barber-theme, the dialogs inside .modal-root.barber-theme).
+/* Admin agenda: the day's operation. Tokens and shared components
+   (buttons, fields, notices) come from src/styles; this file lays out the
+   header, filters, the desktop grid, the phone list and the dialogs.
 
    Grid geometry: the API sends instants, utils/agendaLayout.js turns them
    into minutes from the start of the drawn range (`--top`, `--height`,
@@ -57,29 +57,6 @@
   gap: 0.5rem;
 }
 
-.barber-theme .icon-button {
-  display: inline-grid;
-  place-items: center;
-  width: 2.9rem;
-  height: 2.9rem;
-  padding: 0;
-  color: var(--color-black);
-  background: var(--surface-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  cursor: pointer;
-}
-
-.barber-theme .icon-button:hover:not(:disabled) {
-  border-color: var(--color-maroon);
-  color: var(--color-maroon-dark);
-}
-
-.barber-theme .icon-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .agenda-page .agenda-today {
   padding-inline: 1.1rem;
 }
@@ -103,19 +80,6 @@
   padding: 0.9rem 1rem;
 }
 
-.agenda-filter {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.agenda-filter label,
-.agenda-field label {
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-
 .agenda-filter-control {
   position: relative;
   display: flex;
@@ -129,21 +93,8 @@
   color: var(--text-muted);
 }
 
-.agenda-filter :is(input, select),
-.agenda-field :is(input, select) {
-  width: 100%;
-  min-width: 0;
-  min-height: 2.75rem;
-  padding: 0.5rem 0.7rem;
-  font: inherit;
-  color: var(--color-black);
-  background: var(--surface-raised);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-}
-
-/* After the generic padding above, which would otherwise win and put the
-   date under the calendar icon. */
+/* Room for the calendar icon; agenda.css loads after the shared field
+   styles, so this padding wins over theirs. */
 .agenda-filter .agenda-filter-control input {
   padding-left: 2.3rem;
 }
@@ -177,64 +128,25 @@
   transform: translateY(25%) rotate(-135deg);
 }
 
-.agenda-more-filters > summary:focus-visible {
-  outline: 3px solid var(--color-brass);
-  outline-offset: 2px;
-}
-
 .agenda-more-filters-body {
   display: grid;
   padding-top: 0.5rem;
 }
 
-.agenda-field :is(input, select)[aria-invalid='true'] {
-  border-color: var(--color-danger);
-}
-
-.agenda-field :is(input, select):disabled {
-  background: var(--surface-muted);
-  color: var(--text-muted);
-}
-
 /* ---- Notices ---------------------------------------------------------------- */
 
-.agenda-notice {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin: 0;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  background: var(--surface-raised);
-  overflow-wrap: anywhere;
-}
-
-.agenda-notice p {
+.agenda-page .notice,
+.modal-body .notice {
   margin: 0;
 }
 
-.agenda-notice--error {
-  background: var(--surface-danger);
-  border-color: #e4b9b2;
-  color: #6b0f1d;
-}
-
-.agenda-notice--success {
-  background: var(--surface-success);
-  border-color: #b7d3ad;
-  color: #1f4a27;
-}
-
-.agenda-notice--info {
+/* Several paragraphs in one informative notice read as a block. */
+.agenda-info {
   display: block;
-  background: var(--surface-muted);
 }
 
-.agenda-notice--info p + p {
-  margin-top: 0.35rem;
+.agenda-info p + p {
+  margin-top: var(--space-1);
 }
 
 .agenda-flash {
@@ -242,9 +154,6 @@
 }
 
 .agenda-flash .icon-button {
-  flex-shrink: 0;
-  width: 2.4rem;
-  height: 2.4rem;
   background: transparent;
   border-color: transparent;
 }
@@ -300,17 +209,19 @@
 
 .status-badge--confirmed {
   background: var(--surface-success);
-  color: #1f4a27;
+  color: var(--color-success);
+  border-color: #c4dbb9;
 }
 
 .status-badge--completed {
-  background: #dde6ef;
-  color: #1d3a57;
+  background: var(--surface-ink);
+  color: var(--text-on-dark);
 }
 
 .status-badge--no_show {
-  background: #f6e7c8;
-  color: #5c3d06;
+  background: var(--surface-warning);
+  color: var(--color-warning);
+  border-color: #e7d3a6;
 }
 
 .status-badge--cancelled {
@@ -882,39 +793,15 @@
   gap: 0.9rem;
 }
 
-.agenda-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-}
-
-.agenda-field p {
+.agenda-form .field p {
   margin: 0;
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }
 
 .agenda-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: 0.9rem;
-}
-
-.barber-theme .field-error {
-  margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--color-danger);
-}
-
-.barber-theme .link-button {
-  padding: 0;
-  font: inherit;
-  color: var(--color-maroon);
-  text-decoration: underline;
-  background: none;
-  border: 0;
-  cursor: pointer;
 }
 
 .agenda-form-actions {

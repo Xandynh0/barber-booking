@@ -158,7 +158,7 @@ function Agenda() {
 
   const refineFilters = (
     <>
-      <div className="agenda-filter">
+      <div className="field agenda-filter">
         <label htmlFor={filterIds.professional}>{t('agenda.filters.professional')}</label>
         <select id={filterIds.professional} value={professionalId} onChange={(event) => setParam('profissional', event.target.value)}>
           <option value="">{t('agenda.filters.allProfessionals')}</option>
@@ -170,7 +170,7 @@ function Agenda() {
           ))}
         </select>
       </div>
-      <div className="agenda-filter">
+      <div className="field agenda-filter">
         <label htmlFor={filterIds.service}>{t('agenda.filters.service')}</label>
         <select id={filterIds.service} value={serviceFilter} onChange={(event) => setParam('servico', event.target.value)}>
           <option value="">{t('agenda.filters.allServices')}</option>
@@ -181,7 +181,7 @@ function Agenda() {
           ))}
         </select>
       </div>
-      <div className="agenda-filter">
+      <div className="field agenda-filter">
         <label htmlFor={filterIds.status}>{t('agenda.filters.status')}</label>
         <select id={filterIds.status} value={statusFilter} onChange={(event) => setParam('status', event.target.value)}>
           <option value="">{t('agenda.filters.allStatuses')}</option>
@@ -203,7 +203,7 @@ function Agenda() {
         </p>
 
         {sessionExpired && (
-          <div role="alert" className="agenda-notice agenda-notice--error agenda-session">
+          <div role="alert" className="notice notice--error agenda-session">
             <p>{t('agenda.sessionExpired')}</p>
             <Link className="primary-button" to="/admin/login">
               {t('agenda.signInAgain')}
@@ -253,7 +253,7 @@ function Agenda() {
         </header>
 
         <section className="agenda-filters theme-card" aria-label={t('agenda.filtersLabel')}>
-          <div className="agenda-filter">
+          <div className="field agenda-filter">
             <label htmlFor="agenda-date-input">{t('agenda.dateLabel')}</label>
             <span className="agenda-filter-control">
               <CalendarIcon size={18} />
@@ -280,7 +280,7 @@ function Agenda() {
         </section>
 
         {flash && (
-          <div className="agenda-notice agenda-notice--success agenda-flash" role="status">
+          <div className="notice notice--success agenda-flash" role="status">
             <p>{flash}</p>
             <button type="button" className="icon-button" onClick={() => setFlash(null)} aria-label={t('agenda.details.close')}>
               <CloseIcon size={18} />
@@ -289,7 +289,7 @@ function Agenda() {
         )}
 
         {settingsFailed && !sessionExpired && (
-          <div role="alert" className="agenda-notice agenda-notice--error">
+          <div role="alert" className="notice notice--error">
             <p>{t('agenda.error')}</p>
             <button
               type="button"
@@ -311,7 +311,7 @@ function Agenda() {
         )}
 
         {failed && !sessionExpired && (
-          <div role="alert" className="agenda-notice agenda-notice--error">
+          <div role="alert" className="notice notice--error">
             <p>{t('agenda.error')}</p>
             <button type="button" className="secondary-button" onClick={refresh}>
               {t('agenda.retry')}

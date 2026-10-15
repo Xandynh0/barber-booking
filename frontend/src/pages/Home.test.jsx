@@ -54,6 +54,14 @@ describe('Home', () => {
     expect(screen.getByText('(11) 3333-4444')).toBeInTheDocument()
   })
 
+  it('offers a skip link straight to the page content', async () => {
+    renderHome()
+
+    expect(screen.getByRole('link', { name: 'Pular para o conteúdo' })).toHaveAttribute('href', '#conteudo')
+    expect(document.getElementById('conteudo').tagName).toBe('MAIN')
+    expect(await screen.findByRole('link', { name: 'Área do administrador' })).toHaveAttribute('href', '/admin/login')
+  })
+
   it('says so when nothing can be booked', async () => {
     servicesResponse = () => json(200, { data: [] })
 

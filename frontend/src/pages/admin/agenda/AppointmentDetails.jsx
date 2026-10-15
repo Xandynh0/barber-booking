@@ -101,7 +101,7 @@ export function AppointmentDetails({ publicId, onClose, onChanged, onSessionExpi
       )}
 
       {answer?.error && (
-        <div role="alert" className="agenda-notice agenda-notice--error">
+        <div role="alert" className="notice notice--error">
           <p>{isSessionError(answer.error) ? t('agenda.sessionExpired') : t('agenda.details.error')}</p>
           {!isSessionError(answer.error) && (
             <button type="button" className="secondary-button" onClick={reload}>
@@ -174,7 +174,7 @@ export function AppointmentDetails({ publicId, onClose, onChanged, onSessionExpi
 
           <div aria-live="polite">
             {feedback && (
-              <p className={`agenda-notice agenda-notice--${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>
+              <p className={`notice notice--${feedback.kind}`} role={feedback.kind === 'error' ? 'alert' : 'status'}>
                 {feedback.text}
               </p>
             )}

@@ -1,0 +1,114 @@
+/* Barber Booking design tokens — the single source of every color, type
+   size, space, radius, shadow and motion value (docs/desenvolvimento.md,
+   "Sistema visual"). Identity: an old barbershop's signboard and price
+   board — cream paper, maroon, near-black brown and aged brass.
+
+   Contrast (WCAG 2.2), measured on --surface-page / --surface-raised:
+   --text 14.8:1, --text-muted 6.5:1, --color-maroon 10:1,
+   --color-brass-deep 5.4:1 (brass as TEXT on light surfaces), --focus-ring
+   5.4:1, --border-control 3.3:1 (field outlines, 1.4.11). Plain
+   --color-brass is decorative on light surfaces (2.6:1) and only carries
+   meaning on --surface-ink (5.6:1).
+
+   The Laravel cancellation pages cannot load this file (their CSP only
+   allows inline styles), so resources/views/cancellation/layout.blade.php
+   repeats the values it uses. Keep both in step. */
+
+:root {
+  /* ---- Palette ---------------------------------------------------------- */
+  --color-cream: #f4ecdc;
+  --color-cream-dark: #e9dcc2;
+  --color-maroon: #6e1423;
+  --color-maroon-dark: #4c0e18;
+  --color-black: #1c1a17;
+  --color-ink-soft: #241f1b;
+  --color-brass: #b08d57;
+  --color-brass-deep: #7a5a2c;
+  --color-brass-light: #d9c39c;
+
+  /* ---- Semantic surfaces ------------------------------------------------ */
+  --surface-page: var(--color-cream);
+  --surface: #faf4e8;
+  --surface-raised: #fffdf7;
+  --surface-muted: #efe5d2;
+  --surface-ink: var(--color-black);
+  --surface-selected: #f8ebe8;
+  --surface-danger: #f7e3e0;
+  --surface-success: #e3efdc;
+  --surface-warning: #f6ead0;
+
+  /* ---- Semantic text ---------------------------------------------------- */
+  --text: var(--color-black);
+  --text-muted: #5b5246;
+  --text-on-dark: #fffaf0;
+  --text-on-dark-muted: #cdbfa6;
+  --color-danger: #a3172c;
+  --color-success: #2f6b3a;
+  --color-warning: #7a4f00;
+
+  /* ---- Lines ------------------------------------------------------------ */
+  --border-soft: #e2d5bc;
+  --border-strong: #c7b48f;
+  --border-control: #9c8a63;
+  --border-on-dark: rgba(176, 141, 87, 0.45);
+
+  /* ---- Focus ------------------------------------------------------------ */
+  --focus-ring: var(--color-brass-deep);
+  --focus-ring-on-dark: var(--color-brass);
+  --focus-width: 3px;
+  --focus-offset: 2px;
+
+  /* ---- Typography -------------------------------------------------------
+     Local font stacks only: no network request, nothing for the CSP to
+     allow. Display = the signboard serif; body = the reading face. */
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --text-xs: 0.8125rem;
+  --text-sm: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: clamp(2rem, 4.5vw, 2.6rem);
+  --text-display: clamp(2.5rem, 7vw, 4.25rem);
+
+  --leading-tight: 1.15;
+  --leading-body: 1.55;
+  --tracking-eyebrow: 0.16em;
+
+  /* ---- Space (4px base) -------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --gutter: clamp(1rem, 4vw, 2rem);
+  --content-max: 72rem;
+  --content-narrow: 44rem;
+
+  /* ---- Shape ------------------------------------------------------------ */
+  --radius-sm: 4px;
+  --radius-control: 6px;
+  --radius: 8px;
+  --radius-pill: 999px;
+
+  /* ---- Elevation: one soft level for raised panels, one for dialogs ----- */
+  --shadow-soft: 0 1px 2px rgba(28, 26, 23, 0.05), 0 4px 14px rgba(28, 26, 23, 0.06);
+  --shadow-action: 0 1px 0 rgba(255, 250, 240, 0.12) inset, 0 2px 5px rgba(76, 14, 24, 0.22);
+  --shadow-modal: 0 18px 48px rgba(28, 26, 23, 0.28);
+
+  /* ---- Touch, layers, motion ------------------------------------------- */
+  --target: 2.75rem; /* 44px */
+  --z-sticky: 10;
+  --z-modal: 50;
+  --duration-fast: 120ms;
+  --duration: 180ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}

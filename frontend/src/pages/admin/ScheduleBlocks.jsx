@@ -183,30 +183,30 @@ function ScheduleBlocks() {
 
   return (
     <AdminLayout>
-      <div className="admin-content">
-        <section className="admin-card">
+      <div className="admin-content admin-content--split">
+        <section className="panel admin-panel">
           <h2>{t('scheduleBlocks.newTitle')}</h2>
 
           {formError && (
-            <p className="admin-form-error" role="alert">
+            <p className="notice notice--error" role="alert">
               {formError}
             </p>
           )}
           {successMessage && (
-            <p className="admin-success" role="status">
+            <p className="notice notice--success" role="status">
               {successMessage}
             </p>
           )}
 
-          {professionals !== null && professionals.length === 0 && <p>{t('scheduleBlocks.noProfessionalsYet')}</p>}
+          {professionals !== null && professionals.length === 0 && <p className="empty-state"><span className="empty-state-title">{t('scheduleBlocks.noProfessionalsYet')}</span></p>}
 
           {professionals !== null && professionals.length > 0 && (
             <form onSubmit={handleSubmit} noValidate>
               <div className="admin-form-grid">
-                <fieldset className="admin-field admin-field--full">
+                <fieldset className="field admin-field--full">
                   <legend>{t('scheduleBlocks.scopeLegend')}</legend>
                   <div className="admin-radio-group">
-                    <label className="admin-radio-option" htmlFor={scopeProfessionalId}>
+                    <label className="choice" htmlFor={scopeProfessionalId}>
                       <input
                         id={scopeProfessionalId}
                         type="radio"
@@ -217,7 +217,7 @@ function ScheduleBlocks() {
                       />
                       {t('scheduleBlocks.scopeProfessional')}
                     </label>
-                    <label className="admin-radio-option" htmlFor={scopeShopId}>
+                    <label className="choice" htmlFor={scopeShopId}>
                       <input
                         id={scopeShopId}
                         type="radio"
@@ -229,11 +229,11 @@ function ScheduleBlocks() {
                       {t('scheduleBlocks.scopeShop')}
                     </label>
                   </div>
-                  {form.scope === 'shop' && <p className="admin-hint">{t('scheduleBlocks.shopExplanation')}</p>}
+                  {form.scope === 'shop' && <p className="field-hint">{t('scheduleBlocks.shopExplanation')}</p>}
                 </fieldset>
 
                 {form.scope === 'professional' && (
-                  <div className="admin-field admin-field--full">
+                  <div className="field admin-field--full">
                     <label htmlFor={professionalSelectId}>{t('scheduleBlocks.professionalLabel')}</label>
                     <select
                       id={professionalSelectId}
@@ -247,13 +247,13 @@ function ScheduleBlocks() {
                       ))}
                     </select>
                     {fieldErrors.professional_id && (
-                      <span className="admin-field-error">{fieldErrors.professional_id[0]}</span>
+                      <span className="field-error">{fieldErrors.professional_id[0]}</span>
                     )}
                   </div>
                 )}
 
                 {form.scope === 'shop' && (
-                  <div className="admin-field admin-field-checkbox admin-field--full">
+                  <div className="field-checkbox admin-field--full">
                     <input
                       id={wholeDayId}
                       type="checkbox"
@@ -264,10 +264,10 @@ function ScheduleBlocks() {
                   </div>
                 )}
 
-                <p className="admin-hint admin-field--full">{t('scheduleBlocks.timezoneHint', { timezone })}</p>
+                <p className="field-hint admin-field--full">{t('scheduleBlocks.timezoneHint', { timezone })}</p>
 
                 {form.scope === 'shop' && form.wholeDay ? (
-                  <div className="admin-field admin-field--full">
+                  <div className="field admin-field--full">
                     <label htmlFor={wholeDayDateId}>{t('scheduleBlocks.dateLabel')}</label>
                     <input
                       id={wholeDayDateId}
@@ -279,7 +279,7 @@ function ScheduleBlocks() {
                   </div>
                 ) : (
                   <>
-                    <div className="admin-field">
+                    <div className="field">
                       <label htmlFor={startsDateId}>{t('scheduleBlocks.startsDateLabel')}</label>
                       <input
                         id={startsDateId}
@@ -289,7 +289,7 @@ function ScheduleBlocks() {
                         required
                       />
                     </div>
-                    <div className="admin-field">
+                    <div className="field">
                       <label htmlFor={startsTimeId}>{t('scheduleBlocks.startsTimeLabel')}</label>
                       <input
                         id={startsTimeId}
@@ -300,7 +300,7 @@ function ScheduleBlocks() {
                       />
                     </div>
 
-                    <div className="admin-field">
+                    <div className="field">
                       <label htmlFor={endsDateId}>{t('scheduleBlocks.endsDateLabel')}</label>
                       <input
                         id={endsDateId}
@@ -310,7 +310,7 @@ function ScheduleBlocks() {
                         required
                       />
                     </div>
-                    <div className="admin-field">
+                    <div className="field">
                       <label htmlFor={endsTimeId}>{t('scheduleBlocks.endsTimeLabel')}</label>
                       <input
                         id={endsTimeId}
@@ -323,7 +323,7 @@ function ScheduleBlocks() {
                   </>
                 )}
 
-                <div className="admin-field admin-field--full">
+                <div className="field admin-field--full">
                   <label htmlFor={reasonId}>{t('scheduleBlocks.reasonLabel')}</label>
                   <input
                     id={reasonId}
@@ -334,7 +334,7 @@ function ScheduleBlocks() {
               </div>
 
               <div className="admin-form-actions">
-                <button type="submit" className="admin-button" disabled={submitting}>
+                <button type="submit" className="primary-button" disabled={submitting}>
                   {submitting
                     ? t('common.actions.saving')
                     : form.scope === 'shop'
@@ -346,25 +346,25 @@ function ScheduleBlocks() {
           )}
         </section>
 
-        <section className="admin-card">
+        <section className="panel admin-panel">
           <h2>{t('scheduleBlocks.listTitle')}</h2>
 
-          {loading && <p>{t('common.actions.loading')}</p>}
+          {loading && <p role="status" className="loading-state">{t('common.actions.loading')}</p>}
 
           {loadError && (
-            <div role="alert">
-              <p className="admin-form-error">{loadErrorMessage}</p>
-              <button type="button" className="admin-button" onClick={loadAll}>
+            <div role="alert" className="notice notice--error">
+              <p>{loadErrorMessage}</p>
+              <button type="button" className="secondary-button" onClick={loadAll}>
                 {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {blocks !== null && blocks.length === 0 && <p>{t('scheduleBlocks.emptyState')}</p>}
+          {blocks !== null && blocks.length === 0 && <p className="empty-state"><span className="empty-state-title">{t('scheduleBlocks.emptyState')}</span></p>}
 
           {blocks !== null && blocks.length > 0 && (
             <div className="admin-table-wrapper">
-              <table className="admin-table">
+              <table className="data-table">
                 <thead>
                   <tr>
                     <th scope="col">{t('scheduleBlocks.tableScope')}</th>
@@ -387,11 +387,11 @@ function ScheduleBlocks() {
                         <td data-label={t('scheduleBlocks.tableEnd')}>
                           {formatInstant(item.ends_at, timezone, i18n.language)}
                         </td>
-                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
-                        <td data-label={t('common.actions.actionsColumn')}>
+                        <td className="data-table-wrap" data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
-                            className="admin-button admin-button--secondary"
+                            className="danger-button"
                             onClick={() => handleDeleteGroup(item)}
                             disabled={removingKey === `shop-${item.group_id}`}
                           >
@@ -412,11 +412,11 @@ function ScheduleBlocks() {
                         <td data-label={t('scheduleBlocks.tableEnd')}>
                           {formatInstant(item.ends_at, timezone, i18n.language)}
                         </td>
-                        <td data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
-                        <td data-label={t('common.actions.actionsColumn')}>
+                        <td className="data-table-wrap" data-label={t('scheduleBlocks.tableReason')}>{item.reason || t('common.emptyValue')}</td>
+                        <td className="data-table-actions" data-label={t('common.actions.actionsColumn')}>
                           <button
                             type="button"
-                            className="admin-button admin-button--secondary"
+                            className="danger-button"
                             onClick={() => handleDeleteIndividual(item)}
                             disabled={removingKey === `professional-${item.id}`}
                           >

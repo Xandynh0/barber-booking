@@ -168,23 +168,23 @@ function WorkingHours() {
   return (
     <AdminLayout>
       <div className="admin-content">
-        <section className="admin-card">
+        <section className="panel admin-panel">
           <h2>{t('workingHours.title')}</h2>
 
           {loadError && professionals === null && (
-            <div role="alert">
-              <p className="admin-form-error">{loadErrorMessage}</p>
-              <button type="button" className="admin-button" onClick={loadProfessionals}>
+            <div role="alert" className="notice notice--error">
+              <p>{loadErrorMessage}</p>
+              <button type="button" className="secondary-button" onClick={loadProfessionals}>
                 {t('common.actions.tryAgain')}
               </button>
             </div>
           )}
 
-          {professionals !== null && professionals.length === 0 && <p>{t('workingHours.noProfessionalsYet')}</p>}
+          {professionals !== null && professionals.length === 0 && <p className="empty-state"><span className="empty-state-title">{t('workingHours.noProfessionalsYet')}</span></p>}
 
           {professionals !== null && professionals.length > 0 && (
             <>
-              <div className="admin-field">
+              <div className="field">
                 <label htmlFor={professionalSelectId}>{t('workingHours.professionalLabel')}</label>
                 <select
                   id={professionalSelectId}
@@ -201,22 +201,22 @@ function WorkingHours() {
               </div>
 
               {formError && (
-                <p className="admin-form-error" role="alert">
+                <p className="notice notice--error" role="alert">
                   {formError}
                 </p>
               )}
               {successMessage && (
-                <p className="admin-success" role="status">
+                <p className="notice notice--success" role="status">
                   {successMessage}
                 </p>
               )}
 
-              {loading && <p>{t('common.actions.loading')}</p>}
+              {loading && <p role="status" className="loading-state">{t('common.actions.loading')}</p>}
 
               {loadError && professionals !== null && (
-                <div role="alert">
-                  <p className="admin-form-error">{loadErrorMessage}</p>
-                  <button type="button" className="admin-button" onClick={() => loadSchedule(professionalId)}>
+                <div role="alert" className="notice notice--error">
+              <p>{loadErrorMessage}</p>
+              <button type="button" className="secondary-button" onClick={() => loadSchedule(professionalId)}>
                     {t('common.actions.tryAgain')}
                   </button>
                 </div>
@@ -232,7 +232,7 @@ function WorkingHours() {
 
                       {day.periods.map((period, periodIndex) => (
                         <div className="admin-period-row" key={periodIndex}>
-                          <div className="admin-field">
+                          <div className="field">
                             <label htmlFor={`start-${dayIndex}-${periodIndex}`}>{t('workingHours.startLabel')}</label>
                             <input
                               id={`start-${dayIndex}-${periodIndex}`}
@@ -244,7 +244,7 @@ function WorkingHours() {
                               required
                             />
                           </div>
-                          <div className="admin-field">
+                          <div className="field">
                             <label htmlFor={`end-${dayIndex}-${periodIndex}`}>{t('workingHours.endLabel')}</label>
                             <input
                               id={`end-${dayIndex}-${periodIndex}`}
@@ -256,7 +256,7 @@ function WorkingHours() {
                           </div>
                           <button
                             type="button"
-                            className="admin-button admin-button--secondary"
+                            className="secondary-button"
                             onClick={() => removePeriod(dayIndex, periodIndex)}
                           >
                             {t('workingHours.removePeriod')}
@@ -265,14 +265,14 @@ function WorkingHours() {
                       ))}
 
                       {fieldErrorsByDay[dayIndex]?.map((message, i) => (
-                        <p className="admin-field-error" key={i}>
+                        <p className="field-error" key={i}>
                           {message}
                         </p>
                       ))}
 
                       <button
                         type="button"
-                        className="admin-button admin-button--secondary"
+                        className="secondary-button"
                         onClick={() => addPeriod(dayIndex)}
                       >
                         {t('workingHours.addPeriod')}
@@ -281,7 +281,7 @@ function WorkingHours() {
                   ))}
 
                   <div className="admin-form-actions">
-                    <button type="submit" className="admin-button" disabled={submitting}>
+                    <button type="submit" className="primary-button" disabled={submitting}>
                       {submitting ? t('common.actions.saving') : t('workingHours.saveButton')}
                     </button>
                   </div>

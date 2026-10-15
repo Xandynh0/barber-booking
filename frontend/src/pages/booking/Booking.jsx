@@ -9,7 +9,7 @@ import {
   listPublicServices,
   listServiceProfessionals,
 } from '../../api/publicBooking'
-import { PublicHeader } from '../../components/PublicHeader'
+import { PublicFooter, PublicHeader } from '../../components/PublicHeader'
 import {
   ArrowRightIcon,
   CalendarIcon,
@@ -30,7 +30,6 @@ import {
   horizonDates,
   zonedDate,
 } from '../../utils/publicFormat'
-import '../../styles/barber-theme.css'
 import '../public.css'
 
 const STEPS = ['service', 'professional', 'datetime', 'customer', 'review']
@@ -86,7 +85,7 @@ function Booking() {
   const [fieldErrors, setFieldErrors] = useState({})
 
   const [submitting, setSubmitting] = useState(false)
-  const [notice, setNotice] = useState(null) // { kind: 'error' | 'info', key, retryable }
+  const [notice, setNotice] = useState(null) // { kind: 'error' | 'warning' | 'info', key, retryable }
   const [result, setResult] = useState(null)
 
   const attemptRef = useRef(null) // { fingerprint, key }
@@ -269,7 +268,12 @@ function Booking() {
       if (customer[field].trim() === '') errors[field] = [t('booking.customer.required')]
     }
     setFieldErrors(errors)
-    return Object.keys(errors).length === 0
+    const firstInvalid = CUSTOMER_FIELDS.find((field) => errors[field])
+    if (firstInvalid) {
+      // Keyboard and screen-reader users land on the first field to fix.
+      document.getElementById(ids[firstInvalid.replace('customer_', '')])?.focus()
+    }
+    return firstInvalid === undefined
   }
 
   const canContinue = {
@@ -330,7 +334,7 @@ function Booking() {
         // refresh the times, keep everything the customer typed.
         setStartsAt(null)
         setStep('datetime')
-        setNotice({ kind: 'error', key: 'booking.errors.slotTaken' })
+        setNotice({ kind: 'warning', key: 'booking.errors.slotTaken' })
         reloadSlots()
         return
       case 'VALIDATION_ERROR': {
@@ -388,7 +392,7 @@ function Booking() {
   const shopName = business?.name || t('common.brand')
 
   const noticeElement = notice && (
-    <div className={`public-notice public-notice--${notice.kind}`} role="alert">
+    <div className={`notice notice--${notice.kind}`} role="alert">
       <p>{t(notice.key)}</p>
       {notice.retryable && step === 'review' && (
         <button type="button" className="secondary-button" onClick={confirm} disabled={submitting}>
@@ -399,14 +403,17 @@ function Booking() {
   )
 
   return (
-    <div className="public-shell barber-theme">
+    <div className="public-shell">
       <PublicHeader shopName={shopName} />
 
-      <main className="booking-page">
+      <main id="conteudo" className="booking-page" tabIndex={-1}>
         {step === 'done' && result ? (
           <Done result={result} customerEmail={customer.customer_email.trim()} timezone={timezone} onStartOver={startOver} headingRef={headingRef} />
         ) : (
-          <div className="booking-card theme-card">
+          <div className="booking-card panel">
+            <p className="booking-step-current" aria-hidden="true">
+              {t('booking.stepOf', { current: stepIndex + 1, total: STEPS.length })} · {t(`booking.steps.${step}`)}
+            </p>
             <ol className="booking-steps" aria-label={t('booking.stepsLabel')}>
               {STEPS.map((name, index) => {
                 const done = index < stepIndex
@@ -545,6 +552,8 @@ function Booking() {
           </div>
         )}
       </main>
+
+      <PublicFooter shopName={shopName} business={business} />
     </div>
   )
 }
@@ -554,7 +563,7 @@ function OptionList({ items, failed, onRetry, selectedId, onSelect, labels, rend
 
   if (failed) {
     return (
-      <div role="alert" className="public-notice public-notice--error">
+      <div role="alert" className="notice notice--error">
         <p>{t(labels.error)}</p>
         <button type="button" className="secondary-button" onClick={onRetry}>
           {t('booking.actions.retry')}
@@ -562,8 +571,14 @@ function OptionList({ items, failed, onRetry, selectedId, onSelect, labels, rend
       </div>
     )
   }
-  if (items === null) return <p role="status" className="booking-loading">{t(labels.loading)}</p>
-  if (items.length === 0) return <p className="booking-hint">{t(labels.empty)}</p>
+  if (items === null) return <p role="status" className="loading-state">{t(labels.loading)}</p>
+  if (items.length === 0) {
+    return (
+      <p className="empty-state">
+        <span className="empty-state-title">{t(labels.empty)}</span>
+      </p>
+    )
+  }
 
   return (
     <ul className="option-list">
@@ -647,14 +662,14 @@ function DateTimeStep({ dates, date, onDate, emptyDays, slots, failed, onRetry, 
           </h2>
 
           {failed && (
-            <div role="alert" className="public-notice public-notice--error">
+            <div role="alert" className="notice notice--error">
               <p>{t('booking.datetime.error')}</p>
               <button type="button" className="secondary-button" onClick={onRetry}>
                 {t('booking.actions.retry')}
               </button>
             </div>
           )}
-          {!failed && slots === null && <p role="status" className="booking-loading">{t('booking.datetime.loading')}</p>}
+          {!failed && slots === null && <p role="status" className="loading-state">{t('booking.datetime.loading')}</p>}
           {!failed && slots !== null && slots.length === 0 && (
             <div className="empty-state" role="status">
               <span className="icon-bubble icon-bubble--danger empty-state-icon">
@@ -667,15 +682,24 @@ function DateTimeStep({ dates, date, onDate, emptyDays, slots, failed, onRetry, 
             </div>
           )}
           {!failed && slots !== null && slots.length > 0 && (
-            <ul className="slot-list" aria-labelledby="booking-slots-label">
-              {slots.map((slot) => (
-                <li key={slot.starts_at}>
-                  <button type="button" className="slot-button" aria-pressed={slot.starts_at === startsAt} onClick={() => onSlot(slot.starts_at)}>
-                    {formatTime(slot.starts_at, timezone)}
-                  </button>
-                </li>
+            <div className="slot-periods">
+              {groupByPeriod(slots, timezone).map(({ period, items }) => (
+                <div key={period} className="slot-period">
+                  <h3 className="slot-period-title" id={`booking-slots-${period}`}>
+                    {t(`booking.datetime.periods.${period}`)}
+                  </h3>
+                  <ul className="slot-list" aria-labelledby={`booking-slots-label booking-slots-${period}`}>
+                    {items.map((slot) => (
+                      <li key={slot.starts_at}>
+                        <button type="button" className="slot-button" aria-pressed={slot.starts_at === startsAt} onClick={() => onSlot(slot.starts_at)}>
+                          {formatTime(slot.starts_at, timezone)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
           {timezone && <p className="booking-hint booking-timezone">{t('booking.datetime.timezoneNote', { timezone })}</p>}
         </>
@@ -684,13 +708,33 @@ function DateTimeStep({ dates, date, onDate, emptyDays, slots, failed, onRetry, 
   )
 }
 
+const PERIODS = [
+  ['morning', 12],
+  ['afternoon', 18],
+  ['evening', 24],
+]
+
+/**
+ * Splits the day's slots into morning / afternoon / evening by their local
+ * hour in the barbershop's time zone, keeping the API's order. Presentation
+ * only: which times exist is still the API's answer.
+ */
+function groupByPeriod(slots, timezone) {
+  const groups = PERIODS.map(([period]) => ({ period, items: [] }))
+  for (const slot of slots) {
+    const hour = Number(formatTime(slot.starts_at, timezone).slice(0, 2))
+    groups[PERIODS.findIndex(([, until]) => hour < until)].items.push(slot)
+  }
+  return groups.filter((group) => group.items.length > 0)
+}
+
 function Field({ id, label, hint, error, children }) {
   return (
-    <div className="booking-field">
+    <div className="field">
       <label htmlFor={id}>{label}</label>
       {children}
       {hint && (
-        <span className="booking-hint" id={`${id}-hint`}>
+        <span className="field-hint" id={`${id}-hint`}>
           {hint}
         </span>
       )}
@@ -774,7 +818,7 @@ function Done({ result, customerEmail, timezone, onStartOver, headingRef }) {
   }[result.notification_status] ?? 'booking.done.emailNotSent'
 
   return (
-    <section className="booking-done theme-card" aria-labelledby="booking-done-heading">
+    <section className="booking-done panel" aria-labelledby="booking-done-heading">
       <span className="icon-bubble icon-bubble--large icon-bubble--success done-icon" aria-hidden="true">
         <CheckIcon size={30} />
       </span>
@@ -827,7 +871,7 @@ function Done({ result, customerEmail, timezone, onStartOver, headingRef }) {
         {t('booking.done.reference')}: <span className="summary-reference">{result.public_id}</span>
       </p>
 
-      <div className={`public-notice done-email ${result.notification_status === 'sent' ? '' : 'public-notice--info'}`}>
+      <div className={`notice done-email ${result.notification_status === 'sent' ? 'notice--success' : 'notice--info'}`}>
         <MailIcon size={20} />
         <p>{t(emailKey, { email: customerEmail })}</p>
       </div>

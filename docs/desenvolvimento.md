@@ -467,7 +467,7 @@ Referências em `docs/design/`:
 
 As referências são pranchas de apresentação: as molduras de celular, os títulos de prancha e os vários estados lado a lado **não** foram reproduzidos. Cada estado aparece só quando é real, e nomes, preços, datas e horários vêm sempre da API.
 
-- **Tema compartilhado:** `frontend/src/styles/barber-theme.css`. Ele tem os tokens (creme, bordô, carvão, latão, superfícies, sombras e raios), a serifa expressiva para títulos e botões e uma fonte de leitura simples para textos, campos e horários. Também traz os botões primário, secundário e de perigo, o foco visível, a bolha de ícone e o cartão. Tudo fica sob a classe `.barber-theme`, sem nenhum seletor global: só as telas que adotam a classe mudam. Hoje são a homepage e `/agendar` (`.public-shell barber-theme`); a agenda administrativa pode adotá-la na sua entrega. O layout específico das telas públicas fica em `src/pages/public.css`.
+- **Tema compartilhado:** hoje em `frontend/src/styles` (tokens, base e componentes globais), descrito em "Sistema visual e redesign completo". O layout específico das telas públicas fica em `src/pages/public.css`.
 - **Fontes:** nenhuma fonte web. A serifa é uma pilha do sistema (Iowan Old Style, Palatino Linotype, Palatino, Book Antiqua, Georgia), porque as páginas de cancelamento proíbem recursos externos pela CSP e o projeto não ganha dependência nova. O desenho final varia um pouco entre sistemas operacionais.
 - **Cabeçalho público:** carvão, com tesoura e marca em serifa, um divisor de latão e "Agendamento online". O idioma aparece como texto creme, com sublinhado de latão no idioma ativo. Antes, o botão "English" inativo tinha texto carvão sobre fundo carvão (contraste 1,00:1, parecia vazio). Medido no Edge pelo proxy, agora tem 14,54:1 nos estados normal, ativo, hover e foco, e o foco ganha um contorno de latão de 3 px. Em telas estreitas, o cabeçalho quebra a linha em vez de empurrar o idioma para fora.
 - **Jornada:**
@@ -766,6 +766,150 @@ Além disso, os contadores `AUTO_INCREMENT` avançaram, e as mensagens de teste 
 5. Abra uma reserva, clique em "Cancelar reserva" e depois em "Manter reserva". Aperte Esc: o modal fecha e o foco volta ao cartão. Depois cancele de verdade: o horário volta a ficar livre.
 6. Crie uma reserva com e-mail e use "Reenviar confirmação". Confira em http://localhost:8025 e abra o link.
 7. Repita em largura de celular (cerca de 390 px) e em English.
+
+## Sistema visual e redesign completo
+
+Branch `feat/complete-ui-redesign`, criada a partir do master em `a6e2dfb`. O visual anterior está preservado na branch `backup/ui-old-barber-v1` e na tag anotada `ui-old-barber-v1`, que apontam para o mesmo commit. Endpoints, payloads, autenticação, CSRF, idempotência, regras de disponibilidade, notificações e cancelamento assinado não mudaram. O backend só recebeu o CSS e o markup do cabeçalho e do rodapé das páginas de cancelamento.
+
+### Direção visual
+
+"Barbearia de ofício": o letreiro e a tabela de preços de uma barbearia tradicional, com acabamento de produto atual.
+
+- **Paleta:** creme, bordô, quase-preto amarronzado e latão envelhecido. O bordô é a única cor de ação. O latão serve de detalhe e, em texto sobre fundo claro, usa a variante escura (5,4:1).
+- **Tipografia:** serifa de letreiro (pilha local Iowan Old Style / Palatino / Georgia) em títulos, marca e botões, e fonte do sistema no texto, nos campos e nos números. Não há fonte externa nem requisição de rede, e a CSP das páginas Laravel continua igual.
+- **Âncoras de identidade:** a faixa diagonal de poste de barbeiro no topo das barras escuras; a tabela de preços com pontilhado entre o nome e o valor; o quadro escuro "Como agendar" com numerais romanos; o sobrelinha em versalete com losangos; e os filetes duplos de latão nos cartões principais.
+- **Contenção:** nenhuma animação contínua, nenhum gradiente decorativo nem glassmorphism. A única sombra forte é a do modal, e cartões só aparecem onde agrupam conteúdo de fato.
+
+### Sistema (src/styles)
+
+- `tokens.css`: paleta e superfícies semânticas, texto, linhas, foco, escala tipográfica, espaço (base 4 px), raios, as duas elevações, alvo de toque (44 px), camadas e duração do movimento. Os valores de contraste estão anotados no cabeçalho do arquivo.
+- `base.css`: reset, tipografia, um único tratamento de foco (latão escuro no claro, latão nas barras escuras, inclusive nos segmentos de data e hora), link de pular para o conteúdo e `prefers-reduced-motion`.
+- `components.css`: botões (primário, secundário, perigo, discreto, ícone, link), painel, título de página, campos com rótulo, dica e erro (o erro tem ícone, não só cor), caixas de seleção e rádio de 44 px, avisos (erro, sucesso, atenção, informação), selos, estados vazio e carregando (um losango estático, sem spinner), bolha de ícone, tabela que vira linhas rotuladas abaixo de 768 px e os ornamentos.
+- O `barber-theme.css` (escopado), o `index.css`, o `App.css` (sem uso) e o `ProtectedRoute.css` foram removidos. O `admin.css` ficou só com o layout das telas administrativas. Os dois estilos de botão, campo e cartão que existiam lá foram substituídos pelos compartilhados.
+- As páginas de cancelamento repetem os valores dos tokens em CSS inline, porque a CSP só permite estilo inline.
+
+### Auditoria do "antes" (14/10/2026, Edge headless, 118 capturas)
+
+- **Dois sistemas visuais:** público e agenda em `barber-theme`; login, serviços, profissionais, expediente e bloqueios em `admin.css` (rótulos em caixa-alta, campos com fundo bege, botões de outro desenho).
+- **Rolagem horizontal no login em 390 e 320 px:** o seletor de idioma ficava fora do fluxo.
+- **Contraste:** o anel de foco em latão sobre creme tinha 2,6:1, abaixo do 3:1 exigido, e as bordas dos campos também ficavam abaixo de 3:1.
+- **Texto pequeno:** no celular, os rótulos das etapas do agendamento tinham 11 px.
+- **Status "concluído" em azul**, fora da paleta.
+- **Homepage genérica:** 17 cartões iguais com o mesmo ícone, quase 3.800 px de altura no celular e nenhum rodapé.
+- **Inconsistência:** as páginas de cancelamento tinham outro cabeçalho; o login não tinha a identidade.
+- **Opções de idioma com 38 px** de altura, abaixo dos 44 px.
+- **Horários do dia numa grade única** de até 50 botões.
+
+### Telas refeitas
+
+- **Homepage:** destaque em duas colunas (letreiro e quadro "Como agendar"); tabela de preços com pontilhado, em duas colunas a partir de 1024 px; rodapé escuro com contato e acesso ao administrador.
+- **Jornada `/agendar`:**
+  - etapas com marcadores; no celular, uma linha "Etapa X de 5 · nome";
+  - dias como bilhetes;
+  - horários agrupados em manhã, tarde e noite (só apresentação);
+  - conflito de horário como aviso de atenção;
+  - foco no primeiro campo inválido;
+  - confirmação com filete de latão.
+- **Login:** letreiro escuro à esquerda a partir de 960 px, faixa compacta no celular e "Voltar ao site".
+- **Admin:**
+  - barra lateral escura com faixa de poste e item ativo marcado em bordô, filete de latão e negrito;
+  - formulário ao lado da lista a partir de 1200 px;
+  - tabelas que viram linhas rotuladas no celular;
+  - expediente em linhas por dia;
+  - remover bloqueio com o botão de perigo;
+  - selos de status com texto.
+- **Agenda:** passou aos campos e avisos compartilhados; o status concluído saiu do azul para o escuro. A grade, a lista e as regras não mudaram.
+- **Cancelamento (Laravel):** mesmo cabeçalho, cartão e rodapé da área pública.
+
+### Revisão com as três skills
+
+Hierarquia aplicada: regras testadas → acessibilidade → identidade old barber → `docs/design` → ui-ux-pro-max → frontend-design → design-taste-frontend.
+
+**ui-ux-pro-max (2.15.0)**
+- Consultas: `--design-system` para "barbershop booking traditional vintage service" e buscas de UX sobre progresso em etapas, foco, erros e carregamento. `references/quick-reference.md` e `pro-rules.md` foram lidos por inteiro.
+- **Aplicado:**
+  - contraste mínimo (foco e bordas corrigidos);
+  - alvos de 44 px;
+  - indicador de etapas;
+  - erro abaixo do campo com `aria-describedby` e foco no primeiro inválido;
+  - selos e estados que não dependem só da cor;
+  - link de pular para o conteúdo;
+  - `focus-not-obscured` (verificado: nenhum controle focado fica coberto);
+  - um único CTA primário por tela;
+  - números tabulares em preços e horários;
+  - escala de espaço de 4 px;
+  - poucos breakpoints, por função: 720 px (celular), 768 px (tabelas viram linhas), 960 px (barra lateral e grade da agenda), 1024 px (tabela de preços em duas colunas), 1200 px (formulário ao lado da lista), mais ajustes finos em 400 e 560 px;
+  - `prefers-reduced-motion`.
+- **Rejeitado:**
+  - paleta azul-marinho com dourado e fonte IBM Plex Sans do `--design-system`: contrariam a identidade aprovada;
+  - padrão "Trust & Authority" com selos de segurança e depoimentos: seria conteúdo fictício;
+  - "scroll reveal" com GSAP: dependência nova e movimento sem ganho;
+  - skeleton com brilho: a espera é curta e o estado de carregamento em texto com `role="status"` é acessível;
+  - checagem de modo escuro: o produto não tem modo escuro.
+
+**frontend-design**
+- **Aplicado:**
+  - direção nomeada ("barbearia de ofício": editorial tradicional + utilitário no admin);
+  - âncora reconhecível sem o logo (faixa de poste e tabela de preços);
+  - só variáveis CSS;
+  - HTML semântico;
+  - componentes existentes reaproveitados;
+  - verificação real de foco, teclado, larguras e estados.
+- **Rejeitado:**
+  - textura de grão: custo de pintura sem ganho de leitura;
+  - assimetria forte e sobreposições: a agenda precisa de eficiência;
+  - sequência de entrada animada: o pedido proíbe animações exageradas.
+
+**design-taste-frontend (crítica final)**
+- **Aplicado:**
+  - fim dos 17 cartões iguais (que imitavam um grid de 3 colunas genérico);
+  - destaque sem centralização;
+  - uma cor de destaque;
+  - nenhum preto puro (`#1c1a17`);
+  - nenhum emoji;
+  - estados vazio, carregando, erro e sucesso em todas as telas;
+  - deslocamento de 1 px no `:active` dos botões, agora global e consistente;
+  - rótulos sempre acima do campo.
+- **Rejeitado:**
+  - Tailwind, Geist/Satoshi e a proibição de serifa em dashboards: contrariam a identidade e o pedido;
+  - Framer Motion, micro-animações contínuas, botões magnéticos e bento grid: o pedido proíbe;
+  - `min-h-[100dvh]` em hero: não se aplica, mas `100dvh` foi adotado no shell e no body.
+
+### Verificação
+
+- Capturas "antes" e "depois" pelo proxy real `localhost:8080`, com login pelo formulário, reservas públicas criadas pela jornada (CSRF e idempotência reais) e cancelamento pelo link assinado do e-mail no Mailpit.
+- Cobertura: PT-BR e EN em 1440, 1366, 1024, 768, 390 e 320 px. Telas cheias e vazias, erro (requisição bloqueada no navegador), validação, modal, detalhes, confirmação, cancelamento, link inválido e reserva já cancelada.
+- Auditoria automática (`a11y`): homepage, `/agendar`, login, agenda, serviços, profissionais, expediente e bloqueios, em PT/EN e 1366/390 px. Ela conferiu:
+  - um único h1 e nenhum nível de título pulado;
+  - todo controle com nome acessível;
+  - alvos de 44 px no celular;
+  - 25 paradas de Tab, cada uma com anel visível, dentro da tela e sem nada por cima;
+  - movimento reduzido respeitado;
+  - nenhuma rolagem horizontal.
+- Feita em Edge headless (`playwright-core`). Não houve uso manual em navegador; ver o roteiro abaixo.
+
+**Resultados (14/10/2026):**
+- **Capturas:** 118 do "antes" e 214 do "depois", fora do repositório. Nas 216 verificações de rolagem horizontal do "depois", nenhuma falhou. A primeira rodada achou 8 falhas na tabela de profissionais, entre 768 e 1440 px, já corrigidas.
+- **Auditoria de acessibilidade:** 32 de 32 sem falha. A primeira rodada achou opções de idioma com 38 px, o anel ausente nos segmentos de data e hora e o link de pular fora da tela; os três foram corrigidos.
+- **Testes:** backend com 265 testes e 1407 asserções (MySQL real), Pint ok; frontend com 143 testes; lint com 0 erros; build ok; `docker compose build` ok.
+- **Banco de dev:** os registros `[TESTE-AGENDA]` (1 admin, 2 serviços, 2 profissionais, 28 períodos de expediente, 1 bloqueio, 16 reservas, 10 notificações e as sessões) foram removidos pelos IDs. O `CHECKSUM TABLE` ficou idêntico à linha de base, e o admin existente (id 1) foi preservado.
+- **Mailpit:** as 10 mensagens geradas pela verificação foram apagadas pelos IDs, e o total voltou a 0.
+
+### Limitações
+
+- O grid da agenda no desktop rola na horizontal dentro do próprio painel quando há muitos profissionais (os sem expediente aparecem por último). É intencional e não rola a página.
+- A confirmação de remoção de bloqueio continua no `window.confirm` do navegador, que o CSS não estiliza.
+- As imagens de `docs/design` foram referência de identidade, não de cópia pixel a pixel.
+- Leitores de tela reais (NVDA, VoiceOver) não foram usados; os nomes acessíveis foram conferidos por script e testes.
+
+### Roteiro manual
+
+1. Homepage em 1366 px e no celular: a tabela de preços, "Ver serviços e preços" (rola até a tabela) e "Agendar este serviço" (abre `/agendar` com o serviço escolhido).
+2. `/agendar` até a confirmação, com um e-mail seu de teste. Confira os grupos manhã, tarde e noite e o foco no primeiro campo vazio ao tentar continuar sem dados.
+3. No Mailpit (http://localhost:8025), abra o link de cancelamento, confira a página e cancele.
+4. Login em `/admin/login`: Tab até o fim e confira o anel de foco.
+5. Agenda, serviços, profissionais, expediente e bloqueios em 1366 px e no celular, nos dois idiomas.
+6. Navegue só pelo teclado, a partir do link "Pular para o conteúdo".
 
 ## Importação de dados de teste fictícios
 

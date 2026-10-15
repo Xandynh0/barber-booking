@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '../context/AuthContext'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { BanIcon, CalendarIcon, ClockIcon, MenuIcon, ScissorsIcon, UsersIcon } from './PublicIcons'
-import '../styles/barber-theme.css'
 import './AdminShell.css'
 
 const LINKS = [
@@ -16,9 +15,10 @@ const LINKS = [
 ]
 
 /**
- * Admin layout after docs/design/1.png: dark sidebar with the brand and the
- * sections, and a light top bar with language and session. On narrow
- * screens the sidebar becomes a top bar whose menu opens on demand.
+ * Admin layout: an ink sidebar (barber-pole band, brand, sections) and a
+ * light top bar with language and session. On narrow screens the sidebar
+ * becomes an ink top bar whose menu opens on demand. The skip link jumps
+ * straight to the page's <main>.
  *
  * Every admin screen uses it: the agenda directly, the others through
  * AdminLayout, which adds the section heading.
@@ -40,8 +40,12 @@ export function AdminShell({ children }) {
   }
 
   return (
-    <div className="admin-shell barber-theme">
-      <aside className="admin-sidebar">
+    <div className="admin-shell">
+      <a className="skip-link" href="#conteudo">
+        {t('common.skipToContent')}
+      </a>
+      <aside className="admin-sidebar on-ink">
+        <div className="pole-stripe" aria-hidden="true" />
         <div className="admin-sidebar-top">
           <span className="admin-sidebar-brand">
             <ScissorsIcon size={26} className="admin-sidebar-brand-icon" />
@@ -89,7 +93,9 @@ export function AdminShell({ children }) {
             {signingOut ? t('common.actions.signingOut') : t('common.actions.signOut')}
           </button>
         </header>
-        <main className="admin-shell-content">{children}</main>
+        <main id="conteudo" className="admin-shell-content" tabIndex={-1}>
+          {children}
+        </main>
       </div>
     </div>
   )
