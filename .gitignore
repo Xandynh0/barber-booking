@@ -1,1 +1,6 @@
 .env
+# Real environment files (e.g. .env.production) never enter Git; only the
+# examples without secrets do.
+.env.*
+!.env.example
+!.env.production.example

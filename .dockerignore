@@ -1,0 +1,28 @@
+# Build context of the production images (docker-compose.prod.yml builds from
+# the repository root). The development images use backend/ and frontend/ as
+# context and their own .dockerignore files, so this file does not affect
+# them. Nothing that may hold a secret or local data enters the context.
+.git
+.github
+docs
+*.md
+*.csv
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules
+frontend/dist
+frontend/coverage
+backend/vendor
+backend/storage/logs/*
+backend/storage/framework/cache/data/*
+backend/storage/framework/sessions/*
+backend/storage/framework/views/*
+backend/storage/app/test-data
+backend/storage/app/test-data-import-manifest.json
+backend/storage/pail
+backend/bootstrap/cache/*.php
+backend/database/database.sqlite
+backend/.phpunit.cache
+backend/.phpunit.result.cache
