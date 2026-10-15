@@ -7,7 +7,7 @@ on:
 
 jobs:
   frontend:
-    name: Frontend (test + build)
+    name: Frontend (lint + test + build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -23,6 +23,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Lint
+        run: npm run lint
 
       - name: Run tests
         run: npm run test
@@ -63,6 +66,9 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
 
+      - name: Code style (Pint)
+        run: vendor/bin/pint --test
+
       - name: Configure environment
         run: |
           cp .env.example .env
@@ -96,10 +102,84 @@ jobs:
         run: php artisan test --compact
 
   docker-build:
-    name: Docker images build
+    name: Docker images build (development)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Build backend and frontend images
         run: docker compose build backend frontend
+
+  production:
+    name: Production stack (build + migrate + smoke test)
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE: docker compose -f docker-compose.prod.yml --env-file .env.prodci
+    steps:
+      - uses: actions/checkout@v4
+
+      # Random throwaway secrets for this run only, plain HTTP with the
+      # explicit ALLOW_INSECURE_HTTP=true (docker/production/local-env.sh).
+      - name: Create a CI-only environment file
+        run: sh docker/production/local-env.sh .env.prodci 8080 barber-booking-prodci
+
+      - name: Validate the Compose file
+        run: |
+          $COMPOSE config --quiet
+          services="$($COMPOSE config --services | sort | paste -sd ' ')"
+          echo "services: $services"
+          test "$services" = "backend mysql scheduler web"
+          # No Mailpit and no Node/Vite image; the smoke test also checks
+          # that the HTML served is the production build.
+          $COMPOSE config --images
+          if $COMPOSE config --images | grep -qiE 'mailpit|node'; then
+            echo "The production stack must not use Mailpit or the Vite dev server." >&2
+            exit 1
+          fi
+
+      - name: Build production images
+        run: $COMPOSE build --pull
+
+      - name: The image refuses APP_DEBUG=true
+        run: |
+          if $COMPOSE run --rm --no-deps -e APP_DEBUG=true backend php -v; then
+            echo "The backend started with APP_DEBUG=true." >&2
+            exit 1
+          fi
+
+      - name: Start the database
+        run: $COMPOSE up -d --wait --wait-timeout 180 mysql
+
+      - name: Migrate a new database and create the business settings row
+        run: |
+          $COMPOSE run --rm backend php artisan migrate --force --no-interaction
+          $COMPOSE run --rm backend php artisan db:seed --force --no-interaction
+
+      - name: Start the stack
+        run: $COMPOSE up -d --wait --wait-timeout 180
+
+      - name: Debug mode is off and the scheduler runs
+        run: |
+          $COMPOSE exec -T backend php artisan config:show app.debug | grep -q false
+          $COMPOSE exec -T scheduler pgrep -f '^php artisan schedule:work'
+          $COMPOSE exec -T scheduler php artisan schedule:list
+
+      - name: Smoke test
+        run: sh docker/production/smoke-test.sh http://127.0.0.1:8080
+
+      - name: The smoke test fails without the backend
+        run: |
+          $COMPOSE stop backend
+          if sh docker/production/smoke-test.sh http://127.0.0.1:8080; then
+            echo "The smoke test passed with the backend down." >&2
+            exit 1
+          fi
+          $COMPOSE start backend
+
+      - name: Logs on failure
+        if: failure()
+        run: $COMPOSE logs --tail=100
+
+      - name: Remove the CI stack
+        if: always()
+        run: $COMPOSE down -v --remove-orphans
