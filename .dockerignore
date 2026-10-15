@@ -5,13 +5,15 @@
 .git
 .github
 docs
-*.md
+**/*.md
 *.csv
 .env
 .env.*
 **/.env
 **/.env.*
 **/node_modules
+backend/Dockerfile
+frontend/Dockerfile
 frontend/dist
 frontend/coverage
 backend/vendor
