@@ -1084,7 +1084,7 @@ O comando `import:test-data` existe na imagem, mas é só para desenvolvimento. 
 - `/cancelar/<inválido>` mostra a página genérica, com `no-store` e `noindex`, sem nada técnico;
 - respostas de erro sem trace, nome de exceção, caminho de arquivo ou SQL.
 
-Com o backend, o banco ou o web fora do ar, o smoke test falha. Isso foi verificado localmente e também na CI.
+Os resultados com cada serviço fora do ar estão em [O que foi verificado](#o-que-foi-verificado-15102026). A CI repete o caso sem o backend.
 
 ### Validação local sem HTTPS
 
