@@ -29,8 +29,17 @@ return Application::configure(basePath: dirname(__DIR__))
         // the right locale. Per-request only (see the middleware's own
         // docblock): nothing here is persisted to session or anywhere else.
         $middleware->prependToGroup('api', SetLocaleFromAcceptLanguage::class);
+        // There is no Laravel login page (the admin signs in through the SPA).
+        // Without this, an API request without `Accept: application/json`
+        // (a browser tab, a scanner) made the auth middleware look up a
+        // `login` route and fail with a 500 instead of answering 401.
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/admin/login');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Expected business outcomes (409: slot taken, contact limit...), not
+        // failures: answered below, but never written to the log as errors.
+        $exceptions->dontReport(BusinessConflictException::class);
+
         // Signed cancellation pages: an invalid or expired signature, an
         // unknown reservation and too many attempts all get the same kind
         // of plain page, never revealing whether a reservation exists.

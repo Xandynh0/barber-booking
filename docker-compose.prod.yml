@@ -1,0 +1,107 @@
+# Production stack of Barber Booking: built images, no bind mounts, no Vite
+# dev server, no Mailpit. Provider-neutral: any host with Docker Compose and
+# a TLS-terminating reverse proxy in front of `web`. Nothing here deploys
+# anything. See docs/desenvolvimento.md, "Produção com Docker".
+#
+#   cp .env.production.example .env.production   # fill in every <...>
+#   docker compose -f docker-compose.prod.yml --env-file .env.production build
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d mysql
+#   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm backend php artisan migrate --force
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# The development stack (docker-compose.yml) is unchanged and separate.
+
+name: ${COMPOSE_PROJECT_NAME:-barber-booking-prod}
+
+x-backend: &backend
+  image: barber-booking-backend:${IMAGE_TAG:?set IMAGE_TAG in the env file}
+  build:
+    context: .
+    dockerfile: docker/production/backend.Dockerfile
+  restart: unless-stopped
+  # The same file passed with --env-file (ENV_FILE overrides the path).
+  env_file:
+    - ${ENV_FILE:-.env.production}
+  depends_on:
+    mysql:
+      condition: service_healthy
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:?set DB_DATABASE in the env file}
+      MYSQL_USER: ${DB_USERNAME:?set DB_USERNAME in the env file}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in the env file}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in the env file}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    # No published port: only the backend and the scheduler reach it.
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # PHP-FPM. Never runs migrations by itself: they are an explicit step
+  # (see the header), so two containers can never race on them.
+  backend:
+    <<: *backend
+    healthcheck:
+      # FPM's own ping (php-fpm.conf), answered without touching PHP code.
+      test: ["CMD-SHELL", "SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Laravel scheduler: the recovery sweep for confirmation e-mails, every
+  # minute (routes/console.php). One service, one replica. Even if a second
+  # scheduler were started by mistake, the task is onOneServer and
+  # withoutOverlapping (locks in the database cache), so it still runs once.
+  scheduler:
+    <<: *backend
+    init: true
+    command: ["php", "artisan", "schedule:work"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Anchored on the PHP process (PID 1 is tini, whose command line also
+      # contains "schedule:work").
+      test: ["CMD", "pgrep", "-f", "^php artisan schedule:work"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    image: barber-booking-web:${IMAGE_TAG:?set IMAGE_TAG in the env file}
+    build:
+      context: .
+      dockerfile: docker/production/web.Dockerfile
+    restart: unless-stopped
+    environment:
+      PUBLIC_SCHEME: ${PUBLIC_SCHEME:-https}
+      REAL_IP_FROM: ${REAL_IP_FROM:-172.16.0.0/12}
+    # Loopback only by default: the TLS proxy on the same host forwards to
+    # it. Change WEB_BIND only if that proxy runs elsewhere.
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      # Through nginx and PHP-FPM down to the database.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  mysql_data:

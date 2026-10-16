@@ -27,7 +27,7 @@ PHP, Docker e CI usam a mesma versão (8.4), conferida contra o `composer.lock` 
 ```
 backend/    Laravel (API)
 frontend/   React + Vite (SPA)
-docker/     configuração do proxy (nginx) e do init do MySQL
+docker/     proxy (nginx) e init do MySQL do desenvolvimento; docker/production/ com as imagens de produção
 docs/       documentação do projeto
 ```
 
@@ -911,6 +911,300 @@ Hierarquia aplicada: regras testadas → acessibilidade → identidade old barbe
 5. Agenda, serviços, profissionais, expediente e bloqueios em 1366 px e no celular, nos dois idiomas.
 6. Navegue só pelo teclado, a partir do link "Pular para o conteúdo".
 
+## Produção com Docker
+
+Branch `feat/production-readiness`. Esta etapa prepara uma configuração de produção **portável e verificável**. Nada foi publicado, e o provedor ainda não foi escolhido. Os arquivos não dependem de nenhum provedor específico: precisam de um host com Docker Compose e de um proxy com HTTPS na frente do serviço `web`.
+
+### Desenvolvimento × produção
+
+| | Desenvolvimento (`docker-compose.yml`) | Produção (`docker-compose.prod.yml`) |
+| --- | --- | --- |
+| Frontend | servidor do Vite com HMR, código montado | build estático do Vite servido pelo nginx; sem Node na imagem final |
+| Backend | `php artisan serve`, código montado, dependências de dev | PHP-FPM, código dentro da imagem, `composer --no-dev`, sem testes |
+| Proxy | `docker/proxy/nginx.conf` | nginx da imagem `web` (`docker/production/nginx.conf.template`) |
+| E-mail | Mailpit | servidor SMTP definido só por variáveis; sem Mailpit |
+| `APP_ENV` / `APP_DEBUG` | `local` / `true` | `production` / `false` (a imagem se recusa a subir com outro valor) |
+| Cookies | HTTP | `Secure` (HTTPS); HTTP só com `ALLOW_INSECURE_HTTP=true` explícito |
+| MySQL | porta 3307 publicada | sem porta publicada |
+| Migrations | manuais | passo explícito do operador; nunca automáticas no boot |
+| Logs | `storage/logs` | saída do contêiner (`stderr`, `docker compose logs`) |
+| Fila | `database`, sem consumidor | `sync`, sem worker (nada é enfileirado) |
+
+A stack de desenvolvimento não mudou.
+
+### Arquivos
+
+- `docker-compose.prod.yml`: serviços `mysql`, `backend` (FPM), `scheduler` e `web`, todos com healthcheck.
+- `.env.production.example`: todas as variáveis, só com placeholders `<...>`, sem segredo.
+- `docker/production/backend.Dockerfile`, `php.ini`, `php-fpm.conf`, `entrypoint.sh`: imagem do backend.
+- `docker/production/web.Dockerfile`, `nginx.conf.template`: imagem web (SPA + roteamento).
+- `docker/production/smoke-test.sh`: smoke test somente leitura.
+- `docker/production/local-env.sh`: gera um ambiente de validação local em HTTP, com segredos aleatórios.
+- `.dockerignore` (raiz): contexto das imagens de produção sem `.env`, `.git`, `vendor`, `node_modules`, logs nem dados locais. As imagens de desenvolvimento usam `backend/` e `frontend/` como contexto e não são afetadas.
+
+### Topologia e roteamento
+
+```
+visitante ──HTTPS──▶ proxy TLS (a escolher) ──HTTP──▶ web:80 (publicado em 127.0.0.1:WEB_PORT)
+                                                        ├─ /api/*, /sanctum/*, /cancelar/*, /up ──▶ backend:9000 (PHP-FPM) ──▶ mysql
+                                                        ├─ /assets/* (arquivos com hash)
+                                                        └─ qualquer outra rota ──▶ index.html (rotas do React)
+scheduler (schedule:work) ──▶ mysql, SMTP
+```
+
+- **Uma origem:** SPA, API, Sanctum e páginas de cancelamento ficam sob o mesmo host. O PHP só executa `public/index.php`; nenhum outro arquivo PHP é alcançável.
+- **Cache:** `/assets/*` tem `Cache-Control: public, max-age=31536000, immutable`, porque os nomes têm hash. O HTML tem `no-cache`: o navegador revalida a cada visita e pega a versão nova logo após uma atualização. Um asset inexistente responde 404, não o `index.html`.
+- **Cabeçalhos da SPA:**
+  - CSP só da mesma origem: `script-src 'self'`; `style-src` com `'unsafe-inline'` por causa dos `style` do React na grade da agenda;
+  - `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy` e `Permissions-Policy`.
+  - As páginas de cancelamento mantêm os cabeçalhos próprios do Laravel.
+- **Log do nginx:** só o caminho, sem query string, para que a assinatura dos links de cancelamento nunca vá para o log.
+- **IP do visitante:**
+  - o nginx usa o último `X-Forwarded-For` quando a conexão vem de `REAL_IP_FROM`, a rede do proxy TLS, e entrega esse endereço ao PHP como `REMOTE_ADDR`;
+  - os `X-Forwarded-*` enviados pelo cliente são descartados antes do PHP;
+  - os limites por IP (login, disponibilidade, reserva, cancelamento) dependem de `REAL_IP_FROM` estar certo.
+- **HTTPS:** com `PUBLIC_SCHEME=https`, o nginx informa `HTTPS=on` ao PHP. Assim o Laravel gera URLs `https://` e emite os cookies com `Secure`.
+
+### Variáveis obrigatórias
+
+Todas estão em `.env.production.example`. O backend se recusa a subir enquanto restar algum `<...>`, e imprime só o nome da variável, nunca o valor.
+
+| Variável | O que é |
+| --- | --- |
+| `IMAGE_TAG` | tag das imagens desta versão, por exemplo o commit curto. É o que permite rollback. |
+| `APP_KEY` | chave do Laravel, gerada uma vez (veja abaixo). Trocar a chave desloga os admins e invalida os links de cancelamento já enviados. |
+| `APP_URL` | URL pública com `https://`, usada nos links dos e-mails |
+| `SANCTUM_STATEFUL_DOMAINS` | host de `APP_URL`, com a porta se não for 443 |
+| `DB_PASSWORD`, `MYSQL_ROOT_PASSWORD` | senhas longas e aleatórias, diferentes entre si |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM_ADDRESS` | servidor SMTP (veja abaixo) |
+
+Já vêm com valor no exemplo e só mudam se necessário:
+- `APP_ENV=production` e `APP_DEBUG=false` (obrigatórios);
+- `SESSION_SECURE_COOKIE=true` e `PUBLIC_SCHEME=https`;
+- `WEB_BIND=127.0.0.1` e `WEB_PORT=8080`;
+- `REAL_IP_FROM`, `COMPOSE_PROJECT_NAME`, `LOG_LEVEL=warning`;
+- `ALLOW_INSECURE_HTTP=false`.
+
+O `.env.production` real nunca entra no Git (`.gitignore`) nem nas imagens (`.dockerignore`). Guarde-o só no servidor, com permissão restrita. Não cole a saída de `docker compose config` em lugar nenhum, porque ela mostra os valores.
+
+### Primeira preparação (comandos exatos)
+
+Todos os comandos rodam na raiz do repositório, num shell POSIX (Linux, macOS ou Git Bash). Para encurtar:
+
+```sh
+C="docker compose -f docker-compose.prod.yml --env-file .env.production"
+```
+
+1. **Arquivo de ambiente:**
+
+   ```sh
+   cp .env.production.example .env.production
+   chmod 600 .env.production
+   ```
+
+   Preencha `IMAGE_TAG` (por exemplo, a saída de `git rev-parse --short HEAD`) e todos os outros `<...>`, exceto `APP_KEY`, que vem no passo 3.
+
+2. **Build das imagens:**
+
+   ```sh
+   $C build --pull
+   ```
+
+3. **Gerar a `APP_KEY`.** O comando abaixo só imprime a chave; o entrypoint é ignorado para não exigir as outras variáveis:
+
+   ```sh
+   docker run --rm --entrypoint php barber-booking-backend:<IMAGE_TAG> artisan key:generate --show
+   ```
+
+   Copie a saída (`base64:...`) para `APP_KEY` no `.env.production`.
+
+4. **SMTP:** preencha `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD` e `MAIL_FROM_ADDRESS`.
+   - Com STARTTLS na porta 587, deixe `MAIL_SCHEME=null`.
+   - Com TLS implícito na porta 465, use `MAIL_SCHEME=smtps`.
+   - `MAIL_TIMEOUT=5` limita a espera pelo servidor. Se o SMTP falhar, a reserva continua confirmada e o scheduler tenta reenviar o e-mail.
+   - O remetente precisa estar autorizado no domínio (SPF/DKIM no provedor de e-mail).
+
+5. **Banco e migrations.** Num banco novo, crie também o registro de configuração da barbearia. O seed é idempotente, só cria esse registro se ele não existir e **não cria nenhum usuário**:
+
+   ```sh
+   $C up -d --wait mysql
+   $C run --rm backend php artisan migrate --force
+   $C run --rm backend php artisan db:seed --force
+   ```
+
+6. **Subir a stack:**
+
+   ```sh
+   $C up -d --wait
+   $C ps
+   ```
+
+7. **Criar o primeiro administrador.** É interativo e a senha é digitada sem eco. Não existe admin nem senha padrão:
+
+   ```sh
+   $C exec backend php artisan admin:create
+   ```
+
+8. **Smoke test**, com a URL pública depois que o proxy TLS estiver configurado:
+
+   ```sh
+   sh docker/production/smoke-test.sh https://<seu-domínio>
+   ```
+
+O comando `import:test-data` existe na imagem, mas é só para desenvolvimento. Não rode em produção.
+
+### Migrations
+
+- **Nunca rodam sozinhas:** nem no entrypoint nem no boot de nenhum serviço. Assim, dois contêineres nunca disputam a mesma migration. Rodam só quando o operador executa o passo explícito: `$C run --rm backend php artisan migrate --force`.
+- **Antes de migrar,** faça backup do banco. Por exemplo, um dump com `mysqldump` dentro do serviço `mysql`; onde guardar o arquivo depende do provedor.
+- **Para conferir:** `$C run --rm backend php artisan migrate:status`.
+- **Rollback de schema:** não faz parte do processo. Uma migration nova precisa continuar compatível com a imagem anterior; se não for, o rollback exige restaurar o backup.
+
+### Scheduler
+
+- **Uma instância:** o serviço `scheduler` roda `php artisan schedule:work` com a mesma imagem do backend, e só existe um no Compose.
+- **Execução única mesmo com engano:** se um segundo scheduler fosse iniciado por engano (`--scale`, outro host no mesmo banco), a tarefa continuaria rodando uma vez por minuto. Ela é `onOneServer()` e `withoutOverlapping(10)`, com as travas na tabela `cache_locks` (`CACHE_STORE=database`).
+- **Sinal e saúde:** o `tini` (`init: true`) repassa o `SIGTERM`, e o healthcheck confere o processo `php artisan schedule:work`.
+- **Sem worker de fila:** nada é enfileirado, então não há worker.
+- **Para conferir:**
+  - `$C logs -f scheduler` mostra uma linha `Running [...] DONE` por minuto;
+  - `$C exec scheduler php artisan schedule:list`.
+
+### Smoke test
+
+`sh docker/production/smoke-test.sh <url-base>` precisa de `sh` e `curl`. É somente leitura: não faz login e não cria nem altera dados. Termina com 0 quando tudo passa e com 1 quando algo falha, listando cada falha. Confere:
+
+- `/up` e `/api/health` (este último chega ao banco);
+- a homepage é o build de produção: `no-cache`, CSP e nenhuma referência ao `@vite/client` ou a `/src/main.jsx`;
+- recarregar `/agendar` e `/admin/agenda` serve o `index.html`;
+- um asset com hash vem com `immutable`, e um asset inexistente dá 404;
+- a API pública responde (configuração e serviços);
+- a API administrativa responde 401 sem sessão, inclusive sem `Accept: application/json`;
+- `/sanctum/csrf-cookie` vem do Laravel, com os cookies `XSRF-TOKEN` e de sessão (e com `Secure` quando a URL é `https`);
+- `/cancelar/<inválido>` mostra a página genérica, com `no-store` e `noindex`, sem nada técnico;
+- respostas de erro sem trace, nome de exceção, caminho de arquivo ou SQL.
+
+Os resultados com cada serviço fora do ar estão em [O que foi verificado](#o-que-foi-verificado-15102026). A CI repete o caso sem o backend.
+
+### Validação local sem HTTPS
+
+Para subir a stack de produção numa máquina de desenvolvimento, isolada da stack de desenvolvimento:
+
+```sh
+sh docker/production/local-env.sh .env.prodlocal 8090 barber-booking-prodlocal
+L="docker compose -f docker-compose.prod.yml --env-file .env.prodlocal"
+$L build
+$L up -d --wait mysql
+$L run --rm backend php artisan migrate --force
+$L run --rm backend php artisan db:seed --force
+$L up -d --wait
+sh docker/production/smoke-test.sh http://127.0.0.1:8090
+$L down -v   # remove só os contêineres, a rede e o volume deste projeto
+```
+
+O `local-env.sh` não sobrescreve um arquivo existente. Ele gera segredos aleatórios, que nunca são impressos, e grava `ENV_FILE` no próprio arquivo, então um único `--env-file` basta. As diferenças em relação a um `.env.production` real são explícitas:
+
+- `ALLOW_INSECURE_HTTP=true`, `SESSION_SECURE_COOKIE=false`, `PUBLIC_SCHEME=http` e `APP_URL=http://127.0.0.1:<porta>`;
+- o backend e o scheduler escrevem no log `WARNING: running without HTTPS (ALLOW_INSECURE_HTTP=true)` ao iniciar;
+- sem essa variável, o entrypoint se recusa a subir com `APP_URL` em `http://` ou sem cookie `Secure`;
+- `MAIL_HOST=smtp.invalid`, um domínio que não resolve: nenhum e-mail sai da máquina. A reserva funciona e a notificação fica como falha, à espera de reenvio.
+
+O projeto (`COMPOSE_PROJECT_NAME`), a porta e o volume são próprios, então os volumes `barber-booking_*` do desenvolvimento não são tocados. O `.env.prodlocal` é ignorado pelo Git e pelas imagens.
+
+### Atualização e rollback
+
+**Atualização:**
+
+```sh
+# no .env.production: IMAGE_TAG=<nova-tag>
+$C build --pull
+# backup do banco
+$C run --rm backend php artisan migrate --force
+$C up -d --wait
+sh docker/production/smoke-test.sh https://<seu-domínio>
+```
+
+**Rollback para a imagem anterior:** as imagens ficam no host com a tag de cada versão. Não remova as anteriores com `docker image prune -a`. Volte `IMAGE_TAG` para a tag anterior e suba **sem build**:
+
+```sh
+# no .env.production: IMAGE_TAG=<tag-anterior>
+$C up -d --no-build --wait
+sh docker/production/smoke-test.sh https://<seu-domínio>
+```
+
+O banco não volta junto. Se a versão nova tiver migrado algo incompatível com a anterior, restaure o backup feito antes da migration.
+
+Verificado localmente: troca de `IMAGE_TAG` com `up -d --no-build`, todos os contêineres na tag anterior, smoke test verde e volta para a tag atual.
+
+### Logs e erros
+
+- **Tudo na saída do contêiner:** `LOG_CHANNEL=stderr` e `LOG_LEVEL=warning`; não há arquivos de log na imagem.
+- **Respostas públicas sem detalhe técnico:**
+  - com `APP_DEBUG=false`, nenhuma resposta tem stack trace, exceção, caminho ou SQL;
+  - erros da API seguem o envelope `error.code`/`error.message`;
+  - um erro inesperado responde `{"message": "Server Error"}`.
+- **Log do contêiner, visível só para quem opera o host:**
+  - um erro inesperado gera stack trace, mas sem valores de argumentos (`zend.exception_ignore_args`), então e-mails e telefones de clientes não aparecem ali;
+  - conflitos de negócio esperados (409) não são registrados.
+- **Log do nginx sem query string:** a assinatura dos links de cancelamento não chega ao log.
+
+### Bugs encontrados nesta preparação
+
+- **Já existia (desenvolvimento e produção):** a API administrativa sem `Accept: application/json` (aba do navegador, scanner) respondia **500** com stack trace no log, em vez de 401. O Laravel procurava a rota `login`, que não existe: o login é pela SPA. Corrigido em `bootstrap/app.php` (`redirectGuestsTo`). O teste fica em `tests/Feature/ErrorHandlingTest.php`.
+- **Já existia:** cada 409 de negócio (horário ocupado, limite por contato) ia para o log como erro, com trace. Agora não vai mais (`dontReport`), e a resposta é a mesma.
+- **Encontrados nos arquivos do checkpoint e corrigidos antes do commit:**
+  - o `access_log` do nginx, declarado no nível `http`, se somava ao log padrão da imagem, cujo formato inclui a query string. A assinatura iria para o log. Agora fica no bloco `server`, substituindo o padrão;
+  - o `*.md` do `.dockerignore` só valia na raiz e deixava os `.md` do backend entrarem na imagem.
+- **No script novo:** se a geração de segredos falhasse, a primeira versão do `local-env.sh` deixava os valores vazios sem abortar. Corrigido antes do commit.
+
+### O que foi verificado (15/10/2026)
+
+Stack isolada: projeto `barber-booking-prodverify`, porta 8091, volume próprio e ambiente gerado por `local-env.sh`. Não houve uso manual em navegador; a verificação de navegador foi em Edge headless.
+
+- **Compose:** `docker compose config` válido nos dois arquivos. No de produção, só `mysql`, `backend`, `scheduler` e `web`, sem Mailpit e sem imagem Node.
+- **Build limpo** (`--no-cache --pull`): backend com 231 MB, executado como `www-data`; web com 74 MB. Nenhum `.env`, `APP_KEY`, teste, `node_modules` ou dependência de dev dentro das imagens.
+- **Banco novo:** as 12 migrations rodaram, e o seed criou só a configuração da barbearia.
+- **Saúde:** os quatro serviços ficaram `healthy`, e o smoke test passou nas 20 verificações.
+- **Desenvolvimento sem regressão:** `docker compose config` válido, imagens de desenvolvimento construídas e stack em `localhost:8080` respondendo `/`, `/agendar`, `/api/health` e `/up`. Volumes e banco `barber_booking` não foram tocados.
+- **Testes:**
+  - backend: 267 testes / 1412 asserções com MySQL real (banco `barber_booking_test`), Pint ok;
+  - frontend: 143 testes, lint com 0 erros (os 6 avisos já existiam), build ok.
+- **Navegador (Edge headless):**
+  - homepage e `/agendar` abrem direto;
+  - `/admin/agenda` sem sessão manda para o login;
+  - login pelo formulário funciona, e recarregar `/admin/servicos` mantém a sessão;
+  - nenhuma violação de CSP.
+- **Login pelo Sanctum (curl):** sem token CSRF dá 419; com token dá 200; depois disso `/admin/me` e `/admin/services` dão 200.
+- **Reserva pública com SMTP inacessível:** respondeu `201` em 0,36 s, e a notificação ficou `failed` com `TransportException`.
+- **Cancelamento:** link assinado (gerado pela classe da aplicação) GET 200 → POST 303 → reserva `cancelled`. A assinatura não aparece no log do nginx, e o e-mail e o telefone do cliente não aparecem em nenhum log.
+- **`APP_DEBUG`:** `about` mostra `Debug Mode OFF` e `config:show app.debug` dá `false`.
+- **Entrypoint:** recusou subir com `APP_DEBUG=true`, `APP_ENV=local`, `APP_KEY` vazio, um placeholder `<...>` e HTTP sem `ALLOW_INSECURE_HTTP`.
+- **Modo HTTPS** (`PUBLIC_SCHEME=https`, `SESSION_SECURE_COOKIE=true`, sem modo inseguro): os cookies `XSRF-TOKEN` e de sessão saem com `Secure`, e o Laravel gera URLs `https://`.
+- **Scheduler:** uma execução por minuto e uma trava `onOneServer` por minuto em `cache_locks`. Sobreviveu sem reinício à queda e à volta do MySQL.
+- **Smoke test com serviço fora do ar:** sem o backend, 14 das 20 verificações falharam; sem o MySQL, 6; sem o web, todas as 20. Saiu com código 1 nos três casos.
+- **Rollback por `IMAGE_TAG`:** verificado (veja acima).
+
+### Limitações e o que falta para uma publicação real
+
+- **Proxy TLS:** não faz parte desta configuração. Falta escolher um e configurar certificado, redirecionamento de HTTP para HTTPS e o cabeçalho HSTS, que deve ficar no proxy.
+- **SMTP real:** não foi testado; só o caminho de falha, com `.invalid`. Falta configurar o provedor de e-mail, com SPF e DKIM do domínio, e enviar um e-mail real.
+- **Backups:** não há backup automático do MySQL nem teste de restauração.
+- **Imagens:** são construídas no próprio host. Não há registry nem publicação de imagens pela CI.
+- **Monitoramento:** não há alerta para healthcheck falhando, nem para confirmações que esgotaram as 5 tentativas (pendência anterior). A retenção dos logs fica com o Docker do host.
+- **Um único host:** o MySQL roda em contêiner, no mesmo host. Um banco gerenciado funciona trocando `DB_HOST` e removendo o serviço `mysql`, mas isso não foi testado.
+- **`REAL_IP_FROM`:** precisa corresponder à rede de onde o proxy TLS conecta. O valor padrão (`172.16.0.0/12`) cobre redes Docker; com outro arranjo, os limites por IP passam a contar o proxy.
+- **Navegador:** a validação foi local, com Edge headless; não houve uso manual nem teste com leitor de tela.
+- **Proxy de desenvolvimento:** continua repassando `X-Forwarded-For` sem que o Laravel confie nele, então em desenvolvimento os limites por IP veem o endereço do proxy. Não muda nada em produção, onde o IP chega como `REMOTE_ADDR`.
+
+### O que depende da escolha do provedor
+
+- onde e como o Docker Compose roda (VM, serviço de contêineres) e se o MySQL fica em contêiner ou gerenciado;
+- o proxy TLS e o certificado; o valor de `REAL_IP_FROM` e `WEB_BIND`;
+- registry de imagens e o fluxo de deploy (manual ou pela CI);
+- backups, retenção de logs, monitoramento e alertas;
+- o servidor SMTP;
+- domínio e DNS.
+
 ## Importação de dados de teste fictícios
 
 Comando manual (`backend/app/Console/Commands/ImportTestData.php`) para popular o banco de desenvolvimento com um pacote fixo de 15 serviços e 12 profissionais fictícios (`dados-teste-barber-booking`, mantido fora do repositório). **Nunca roda no boot, seed padrão ou CI** — é estritamente `php artisan import:test-data`, à mão.
@@ -1260,9 +1554,9 @@ O que dava para confirmar sem navegador foi validado via `curl`/PHPUnit e está 
 - **Pendente:**
   - alerta para confirmações que esgotaram as 5 tentativas (o reenvio pela agenda para no teto);
   - tela de configurações da barbearia;
-  - preparação para publicação.
+  - publicação real: a configuração de produção existe e foi validada localmente (ver "Produção com Docker"), mas o provedor, o proxy TLS, o SMTP real e os backups ainda não foram definidos.
 - `business_settings` tem o registro singleton (seedado) e uma rota de **leitura** (`GET /api/v1/admin/business-settings`, adicionada nesta entrega); ainda sem tela nem endpoint de **edição**.
-- CI builda as imagens Docker (`docker compose build`) para validar os Dockerfiles, mas não executa a stack completa via Compose; os testes de frontend e backend rodam nativamente nos runners do GitHub Actions.
+- A CI builda as imagens de desenvolvimento e, no job "Production stack", constrói, sobe e valida a stack de produção (migrations num banco novo, smoke test, falha do smoke test sem o backend). Os testes de frontend e backend rodam nativamente nos runners do GitHub Actions, com lint e Pint.
 - Concorrência testada de verdade só na criação de reservas (`PublicAppointmentConcurrencyTest`, com duas conexões MySQL simultâneas). Os locks dos cadastros, do expediente e dos bloqueios seguem a mesma ordem, mas não têm um teste de corrida próprio; em particular, a corrida "reserva contra criação de bloqueio" da seção 8 do planejamento ainda não tem teste dedicado.
 - **Resolvido:** a diferença de 20 assertions entre Docker e CI e a suíte rodando como `local` no Docker. Causa e correção em "Ambiente de testes".
 - Homepage, login, agenda, serviços e profissionais confirmados visualmente em navegador real numa entrega anterior. Expediente e bloqueios (telas de uma entrega anterior) ainda **não** foram confirmados visualmente em navegador. A internacionalização (PT-BR/English, esta entrega) foi verificada via `curl` contra o proxy real com `Accept-Language: pt-BR`/`en` (mensagens de erro/validação traduzidas corretamente) e via teste de integração automatizado (`App.test.jsx`, troca de idioma pelo router real nas três áreas), mas a troca de idioma pelo botão **não** foi confirmada visualmente em navegador. Viewport mobile e estado de indisponibilidade também seguem pendentes de validação visual — ver roteiro manual abaixo.
